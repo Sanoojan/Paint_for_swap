@@ -28,6 +28,7 @@ import math
 import time
 import random
 from torch.autograd import Variable
+from src.Face_models.encoders.model_irse import Backbone
 
 __conditioning_keys__ = {'concat': 'c_concat',
                          'crossattn': 'c_crossattn',
@@ -39,6 +40,63 @@ def disabled_train(self, mode=True):
     does not change anymore."""
     return self
 
+class IDLoss(nn.Module):
+    def __init__(self,opts):
+        super(IDLoss, self).__init__()
+        print('Loading ResNet ArcFace')
+        self.opts = opts 
+        
+        self.face_pool_1 = torch.nn.AdaptiveAvgPool2d((256, 256))
+        self.facenet = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
+        # self.facenet=iresnet100(pretrained=False, fp16=False) # changed by sanoojan
+        
+        self.facenet.load_state_dict(torch.load("/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"))
+        self.face_pool_2 = torch.nn.AdaptiveAvgPool2d((112, 112))
+        self.facenet.eval()
+        
+        self.set_requires_grad(False)
+            
+    def set_requires_grad(self, flag=True):
+        for p in self.parameters():
+            p.requires_grad = flag
+    
+    def extract_feats(self, x):
+        x = self.face_pool_1(x)  if x.shape[2]!=256 else  x # (1) resize to 256 if needed
+        x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
+        x = self.face_pool_2(x) # (3) resize to 112 to fit pre-trained model
+        x_feats = self.facenet(x, multi_scale=True)
+        # x_feats = self.facenet(x) # changed by sanoojan
+        return x_feats
+
+    def forward(self, y_hat, y):
+        n_samples = y.shape[0]
+        y_feats_ms = self.extract_feats(y)  # Otherwise use the feature from there
+
+        y_hat_feats_ms = self.extract_feats(y_hat)
+        y_feats_ms = [y_f.detach() for y_f in y_feats_ms]
+        
+        loss_all = 0
+        sim_improvement_all = 0
+   
+        for y_hat_feats, y_feats in zip(y_hat_feats_ms, y_feats_ms):
+ 
+            loss = 0
+            sim_improvement = 0
+            count = 0
+            
+            for i in range(n_samples):
+                sim_target = y_hat_feats[i].dot(y_feats[i])
+                sim_views = y_feats[i].dot(y_feats[i])
+    
+                
+                loss += 1 - sim_target  # id loss
+                sim_improvement +=  float(sim_target) - float(sim_views)
+                count += 1
+            
+            loss_all += loss / count
+            sim_improvement_all += sim_improvement / count
+    
+        return loss_all, sim_improvement_all, None
 
 def uniform_on_device(r1, r2, shape, device):
     return (r1 - r2) * torch.rand(*shape, device=device) + r2
@@ -292,7 +350,7 @@ class DDPM(pl.LightningModule):
             if mean:
                 loss = torch.nn.functional.mse_loss(target, pred)
             else:
-                loss = torch.nn.functional.mse_loss(target, pred, reduction='none')
+                loss = torch.nn.functional.mse_loss(target, pred, reduction='none') #-->
         else:
             raise NotImplementedError("unknown loss type '{loss_type}'")
 
@@ -464,9 +522,12 @@ class LatentDiffusion(DDPM):
         super().__init__(conditioning_key=conditioning_key, *args, **kwargs)
         self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
         self.proj_out=nn.Linear(1024, 768)
+        self.ID_proj_out=nn.Linear(200704, 768)
         self.concat_mode = concat_mode
         self.cond_stage_trainable = cond_stage_trainable
         self.cond_stage_key = cond_stage_key
+        
+        
         try:
             self.num_downs = len(first_stage_config.params.ddconfig.ch_mult) - 1
         except:
@@ -477,6 +538,7 @@ class LatentDiffusion(DDPM):
             self.register_buffer('scale_factor', torch.tensor(scale_factor))
         self.instantiate_first_stage(first_stage_config)
         self.instantiate_cond_stage(cond_stage_config)
+        self.instantiate_IDLoss(cond_stage_config)
         self.cond_stage_forward = cond_stage_forward
         self.clip_denoised = False
         self.bbox_tokenizer = None  
@@ -524,6 +586,22 @@ class LatentDiffusion(DDPM):
         for param in self.first_stage_model.parameters():
             param.requires_grad = False
 
+    def instantiate_IDLoss(self, config):
+        # Need to modify @sanoojan
+        if not self.cond_stage_trainable:
+            model = IDLoss(self.opts)
+            self.face_ID_model = model.eval()
+            self.face_ID_model.train = disabled_train
+            for param in self.face_ID_model.parameters():
+                param.requires_grad = False
+            
+        else:
+            assert config != '__is_first_stage__'
+            assert config != '__is_unconditional__'
+            model = IDLoss(config)
+            self.face_ID_model = model
+    
+    
     def instantiate_cond_stage(self, config):
         if not self.cond_stage_trainable:
             if config == "__is_first_stage__":
@@ -570,9 +648,9 @@ class LatentDiffusion(DDPM):
     def get_learned_conditioning(self, c):
         if self.cond_stage_forward is None:
             if hasattr(self.cond_stage_model, 'encode') and callable(self.cond_stage_model.encode):
-                c = self.cond_stage_model.encode(c)
+                c = self.cond_stage_model.encode(c)  #--> c:[4,1,1024]
                 if isinstance(c, DiagonalGaussianDistribution):
-                    c = c.mode()
+                    c = c.mode() 
             else:
                 c = self.cond_stage_model(c)
         else:
@@ -675,6 +753,10 @@ class LatentDiffusion(DDPM):
                   cond_key=None, return_original_cond=False, bs=None,get_mask=False,get_reference=False):
         
         x,inpaint,mask,reference = super().get_input(batch, k)
+        #x : Original Image
+        #inpaint : Masked original image
+        #mask: mask
+        #reference: Transformed(Masked(original image))
         if bs is not None:
             x = x[:bs]
             inpaint = inpaint[:bs]
@@ -686,7 +768,7 @@ class LatentDiffusion(DDPM):
         encoder_posterior_inpaint = self.encode_first_stage(inpaint)
         z_inpaint = self.get_first_stage_encoding(encoder_posterior_inpaint).detach()
         mask_resize = Resize([z.shape[-1],z.shape[-1]])(mask)
-        z_new = torch.cat((z,z_inpaint,mask_resize),dim=1)
+        z_new = torch.cat((z,z_inpaint,mask_resize),dim=1) # shape:[4,9,64,64] 9:4+4+1
 
         if self.model.conditioning_key is not None:
             if cond_key is None:
@@ -695,7 +777,7 @@ class LatentDiffusion(DDPM):
                 if cond_key in ['txt','caption', 'coordinates_bbox']:
                     xc = batch[cond_key]
                 elif cond_key == 'image':
-                    xc = reference
+                    xc = reference  #-->
                 elif cond_key == 'class_label':
                     xc = batch
                 else:
@@ -707,11 +789,15 @@ class LatentDiffusion(DDPM):
                     # import pudb; pudb.set_trace()
                     c = self.get_learned_conditioning(xc)
                 else:
-                    c = self.get_learned_conditioning(xc.to(self.device))
-                    c = self.proj_out(c)
+                    c2=self.face_ID_model.extract_feats(xc.to(self.device))[0]
+                    c = self.get_learned_conditioning(xc.to(self.device)) #-->c:[4,1,1024]
+                    c = self.proj_out(c) #-->c:[4,1,768]
+                    c2 = self.ID_proj_out(c2) #-->c:[4,768]
+                    c2 = c2.unsqueeze(1) #-->c:[4,1,768]
+                    c=(c2+c)/2.0
                     c = c.float()
             else:
-                c = xc
+                c = xc #-->
             if bs is not None:
                 c = c[:bs]
 
@@ -726,7 +812,7 @@ class LatentDiffusion(DDPM):
             if self.use_positional_encodings:
                 pos_x, pos_y = self.compute_latent_shifts(batch)
                 c = {'pos_x': pos_x, 'pos_y': pos_y}
-        out = [z_new, c]
+        out = [z_new, c] #--> c:[4,3,224,224]
         if return_first_stage_outputs:
             if self.first_stage_key=='inpaint':
                 xrec = self.decode_first_stage(z[:,:4,:,:])
@@ -915,8 +1001,12 @@ class LatentDiffusion(DDPM):
         if self.model.conditioning_key is not None:
             assert c is not None
             if self.cond_stage_trainable:
-                c = self.get_learned_conditioning(c)
-                c = self.proj_out(c)
+                c2=self.face_ID_model.extract_feats(c)[0]
+                c = self.get_learned_conditioning(c) #-->c:[4,1,1024]
+                c = self.proj_out(c) #-->c:[4,1,768]
+                c2 = self.ID_proj_out(c2) #-->c:[4,768]
+                c2 = c2.unsqueeze(1) #-->c:[4,1,768]
+                c=(c2+c)/2.0
                     
             if self.shorten_cond_schedule:  # TODO: drop this option
                 tc = self.cond_ids[t].to(self.device)
@@ -924,7 +1014,7 @@ class LatentDiffusion(DDPM):
 
         if self.u_cond_prop<self.u_cond_percent:
             return self.p_losses(x, self.learnable_vector.repeat(x.shape[0],1,1), t, *args, **kwargs)
-        else:
+        else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
             return self.p_losses(x, c, t, *args, **kwargs)
 
     def _rescale_annotations(self, bboxes, crop_coordinates):  # TODO: move to dataset
@@ -945,7 +1035,7 @@ class LatentDiffusion(DDPM):
         else:
             if not isinstance(cond, list):
                 cond = [cond]
-            key = 'c_concat' if self.model.conditioning_key == 'concat' else 'c_crossattn'
+            key = 'c_concat' if self.model.conditioning_key == 'concat' else 'c_crossattn' # -->c_crossattn
             cond = {key: cond}
 
         if hasattr(self, "split_input_params"):
@@ -1088,7 +1178,7 @@ class LatentDiffusion(DDPM):
 
         loss = self.l_simple_weight * loss.mean()
 
-        loss_vlb = self.get_loss(model_output, target, mean=False).mean(dim=(1, 2, 3))
+        loss_vlb = self.get_loss(model_output, target, mean=False).mean(dim=(1, 2, 3)) #??
         loss_vlb = (self.lvlb_weights[t] * loss_vlb).mean()
         loss_dict.update({f'{prefix}/loss_vlb': loss_vlb})
         loss += (self.original_elbo_weight * loss_vlb)
@@ -1427,7 +1517,7 @@ class LatentDiffusion(DDPM):
 
         if self.cond_stage_trainable:
             print(f"{self.__class__.__name__}: Also optimizing conditioner params!")
-            params = params + list(self.cond_stage_model.final_ln.parameters())+list(self.cond_stage_model.mapper.parameters())+list(self.proj_out.parameters())
+            params = params + list(self.cond_stage_model.final_ln.parameters())+list(self.cond_stage_model.mapper.parameters())+list(self.proj_out.parameters())+list(self.ID_proj_out.parameters())  # changed
         if self.learn_logvar:
             print('Diffusion model optimizing logvar')
             params.append(self.logvar)
@@ -1471,7 +1561,7 @@ class DiffusionWrapper(pl.LightningModule):
             xc = torch.cat([x] + c_concat, dim=1)
             out = self.diffusion_model(xc, t)
         elif self.conditioning_key == 'crossattn':
-            cc = torch.cat(c_crossattn, 1)
+            cc = torch.cat(c_crossattn, 1)  #-->cc.shape = (bs, 1, 768)
             out = self.diffusion_model(x, t, context=cc)
         elif self.conditioning_key == 'hybrid':
             xc = torch.cat([x] + c_concat, dim=1)
@@ -1483,7 +1573,7 @@ class DiffusionWrapper(pl.LightningModule):
         else:
             raise NotImplementedError()
 
-        return out
+        return out  #-->out.shape = (bs, 4,64,64)
 
 
 class Layout2ImgDiffusion(LatentDiffusion):

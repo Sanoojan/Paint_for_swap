@@ -176,12 +176,12 @@ class DDIMSampler(object):
             raise Exception("kwargs must contain either 'test_model_kwargs' or 'rest' key")
         if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
             e_t = self.model.apply_model(x, t, c)
-        else:
-            x_in = torch.cat([x] * 2)
+        else:  # check @ sanoojan
+            x_in = torch.cat([x] * 2) #x_in: 2,9,64,64
             t_in = torch.cat([t] * 2)
-            c_in = torch.cat([unconditional_conditioning, c])
+            c_in = torch.cat([unconditional_conditioning, c]) #c_in: 2,1,768
             e_t_uncond, e_t = self.model.apply_model(x_in, t_in, c_in).chunk(2)
-            e_t = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond)
+            e_t = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond) #1,4,64,64
 
         if score_corrector is not None:
             assert self.model.parameterization == "eps"

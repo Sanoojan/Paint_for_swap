@@ -824,7 +824,7 @@ class UNetModel(nn.Module):
         self.out = nn.Sequential(
             normalization(ch),
             nn.SiLU(),
-            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
+            zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)), #model_channels=320, out_channels=3, dims=2
         )
         if self.predict_codebook_ids:
             self.id_predictor = nn.Sequential(
@@ -878,7 +878,7 @@ class UNetModel(nn.Module):
         for module in self.input_blocks:
             h = module(h, emb, context)
             hs.append(h)
-        h = self.middle_block(h, emb, context)
+        h = self.middle_block(h, emb, context) # ([4, 1280, 8, 8])
         for module in self.output_blocks:
             h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb, context)

@@ -30,9 +30,15 @@ import numpy as np
 import torch
 import torchvision.transforms as TF
 from PIL import Image
+import re
 from scipy import linalg
 from torch.nn.functional import adaptive_avg_pool2d
-import clip
+import torch.nn.functional as F
+# from src.Face_models.encoders.model_irse import Backbone
+import eval_tool.face_vid2vid.modules.hopenet as hopenet1
+from torchvision import models
+# import clip
+import torchvision
 try:
     from tqdm import tqdm
 except ImportError:
@@ -40,20 +46,20 @@ except ImportError:
     def tqdm(x):
         return x
 
-from inception import InceptionV3
+# from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument('--batch-size', type=int, default=50,
+parser.add_argument('--batch-size', type=int, default=20,
                     help='Batch size to use')
 parser.add_argument('--num-workers', type=int,
                     help=('Number of processes to use for data loading. '
                           'Defaults to `min(8, num_cpus)`'))
 parser.add_argument('--device', type=str, default=None,
                     help='Device to use. Like cuda, cuda:0 or cpu')
-parser.add_argument('--dims', type=int, default=2048,
-                    choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
-                    help=('Dimensionality of Inception features to use. '
-                          'By default, uses pool3 features'))
+# parser.add_argument('--dims', type=int, default=2048,
+#                     choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
+#                     help=('Dimensionality of Inception features to use. '
+#                           'By default, uses pool3 features'))
 parser.add_argument('path', type=str, nargs=2,
                     default=['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results'],
                     help=('Paths to the generated images or '
@@ -62,24 +68,46 @@ parser.add_argument('path', type=str, nargs=2,
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}
 
+def get_tensor(normalize=True, toTensor=True):
+    transform_list = []
+    if toTensor:
+        transform_list += [torchvision.transforms.ToTensor()]
+
+    if normalize:
+        transform_list += [torchvision.transforms.Normalize((0.5, 0.5, 0.5),
+                                                (0.5, 0.5, 0.5))]
+    return torchvision.transforms.Compose(transform_list)
 
 class ImagePathDataset(torch.utils.data.Dataset):
     def __init__(self, files, transforms=None):
         self.files = files
         self.transforms = transforms
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        _, self.preprocess = clip.load("ViT-B/32", device=device)
-
+        # _, self.preprocess = clip.load("ViT-B/32", device=device)
+        # self.preprocess
+        # eval_transform = transforms.Compose([transforms.ToTensor(),
+        #                                  transforms.Resize(112),
+        #                                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        self.transform_hopenet =  torchvision.transforms.Compose([TF.ToTensor(),TF.Resize(size=(224, 224)),
+                                                     TF.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, i):
         path = self.files[i]
-        image = self.preprocess(Image.open(path)).unsqueeze(0)
+        image = self.transform_hopenet(Image.open(path).convert('RGB'))
         return image
 
+def headpose_pred_to_degree(pred):
+    device = pred.device
+    idx_tensor = [idx for idx in range(66)]
+    idx_tensor = torch.FloatTensor(idx_tensor).to(device)
+    pred = F.softmax(pred)
+    degree = torch.sum(pred*idx_tensor, axis=1) * 3 - 99
 
-def get_activations(files, model, batch_size=50, dims=2048, device='cpu',
+    return degree
+
+def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
                     num_workers=1):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
@@ -112,26 +140,38 @@ def get_activations(files, model, batch_size=50, dims=2048, device='cpu',
                                              drop_last=False,
                                              num_workers=num_workers)
 
-    pred_arr = np.empty((len(files), 512))
+    pred_arr = np.empty((len(files),3))
 
     start_idx = 0
-
+    
+   
     for batch in tqdm(dataloader):
         batch = batch.to(device)
-
+        # breakpoint()
         with torch.no_grad():
-            pred = model(batch)[0]
+            # x = face_pool_1(batch)  if batch.shape[2]!=256 else  batch # (1) resize to 256 if needed
+            # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
+            # x = face_pool_2(x) # (3) resize to 112 to fit pre-trained model
+            # breakpoint()
+            yaw_gt, pitch_gt, roll_gt = model(batch )
+            yaw_gt = headpose_pred_to_degree(yaw_gt)
+            pitch_gt = headpose_pred_to_degree(pitch_gt)
+            roll_gt = headpose_pred_to_degree(roll_gt)
+            # breakpoint()
+        # breakpoint()
+        # # If model output is not scalar, apply global spatial average pooling.
+        # # This happens if you choose a dimensionality not equal 2048.
+        # if pred.size(2) != 1 or pred.size(3) != 1:
+        #     pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
 
-        # If model output is not scalar, apply global spatial average pooling.
-        # This happens if you choose a dimensionality not equal 2048.
-        if pred.size(2) != 1 or pred.size(3) != 1:
-            pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
+        # pred = pred.squeeze(3).squeeze(2).cpu().numpy()
+        yaw_gt = yaw_gt.cpu().numpy().reshape(-1,1)
+        pitch_gt = pitch_gt.cpu().numpy().reshape(-1,1)
+        roll_gt = roll_gt.cpu().numpy().reshape(-1,1)
+        # breakpoint()
+        pred_arr[start_idx:start_idx + yaw_gt.shape[0]] = np.concatenate((yaw_gt,pitch_gt,roll_gt),axis=1)
 
-        pred = pred.squeeze(3).squeeze(2).cpu().numpy()
-
-        pred_arr[start_idx:start_idx + pred.shape[0]] = pred
-
-        start_idx = start_idx + pred.shape[0]
+        start_idx = start_idx + yaw_gt.shape[0]
 
     return pred_arr
 
@@ -214,7 +254,7 @@ def calculate_activation_statistics(files, model, batch_size=50, dims=2048,
     return mu, sigma
 
 
-def compute_statistics_of_path(path, model, batch_size, dims, device,
+def compute_features_wrapp(path, model, batch_size, dims, device,
                                num_workers=1):
     if path.endswith('.npz'):
         with np.load(path) as f:
@@ -223,29 +263,55 @@ def compute_statistics_of_path(path, model, batch_size, dims, device,
         path = pathlib.Path(path)
         files = sorted([file for ext in IMAGE_EXTENSIONS
                        for file in path.glob('*.{}'.format(ext))])
-        m, s = calculate_activation_statistics(files, model, batch_size,
+        # Extract all numbers before the dot using regular expression
+        # breakpoint()
+        pattern = r'[_\/.-]'
+
+        # Split the file path using the pattern
+        parts = [re.split(pattern, str(file.name)) for file in files]
+        # breakpoint()
+        # Filter out non-numeric parts and convert to integers
+        numbers =[[int(par) for par in part if par.isdigit()] for part in parts]
+        
+        numbers= [ num[-1] for num in numbers if len(num)>0]
+        if numbers[0]>27500: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
+            numbers = [num-28000 for num in numbers] # celeb
+        
+        pred_arr = compute_features(files, model, batch_size,
                                                dims, device, num_workers)
 
-    return m, s
+    return pred_arr,numbers
 
 
-def calculate_fid_given_paths(paths, batch_size, device, dims, num_workers=1):
+def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     """Calculates the FID of two paths"""
     for p in paths:
         if not os.path.exists(p):
             raise RuntimeError('Invalid path: %s' % p)
 
-    block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
+    # block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
 
-    model = InceptionV3([block_idx]).to(device)
+    # model = InceptionV3([block_idx]).to(device)
+    
+    hopenet = hopenet1.Hopenet(models.resnet.Bottleneck, [3, 4, 6, 3], 66)
+    print('Loading hopenet')
+    hopenet_state_dict = torch.load('eval_tool/Face_rec_models/hopenet_robust_alpha1.pkl')
+    hopenet.load_state_dict(hopenet_state_dict)
+    if torch.cuda.is_available():
+        hopenet = hopenet.cuda()
+        hopenet.eval()
 
-    m1, s1 = compute_statistics_of_path(paths[0], model, batch_size,
+    feat1,ori_lab = compute_features_wrapp(paths[0], hopenet, batch_size,
                                         dims, device, num_workers)
-    m2, s2 = compute_statistics_of_path(paths[1], model, batch_size,
+    feat2,swap_lab = compute_features_wrapp(paths[1], hopenet, batch_size,
                                         dims, device, num_workers)
-    fid_value = calculate_frechet_distance(m1, s1, m2, s2)
-
-    return fid_value
+    
+    # breakpoint()
+    # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
+    feat1=feat1[swap_lab]
+    diff_feat = np.abs(feat1-feat2)
+    Value=np.mean(diff_feat[:,0],axis=0)+np.mean(diff_feat[:,1],axis=0)+np.mean(diff_feat[:,2],axis=0) 
+    return Value
 
 
 def main():
@@ -262,12 +328,12 @@ def main():
     else:
         num_workers = args.num_workers
 
-    fid_value = calculate_fid_given_paths(args.path,
+    Pose_value= calculate_id_given_paths(args.path,
                                           args.batch_size,
                                           device,
-                                          args.dims,
+                                          2048,
                                           num_workers)
-    print('FID: ', fid_value)
+    print('Pose_value: ',Pose_value)
 
 
 if __name__ == '__main__':

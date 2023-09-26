@@ -30,9 +30,12 @@ import numpy as np
 import torch
 import torchvision.transforms as TF
 from PIL import Image
+import re
 from scipy import linalg
 from torch.nn.functional import adaptive_avg_pool2d
-import clip
+from src.Face_models.encoders.model_irse import Backbone
+# import clip
+import torchvision
 try:
     from tqdm import tqdm
 except ImportError:
@@ -40,20 +43,20 @@ except ImportError:
     def tqdm(x):
         return x
 
-from inception import InceptionV3
+# from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument('--batch-size', type=int, default=50,
+parser.add_argument('--batch-size', type=int, default=20,
                     help='Batch size to use')
 parser.add_argument('--num-workers', type=int,
                     help=('Number of processes to use for data loading. '
                           'Defaults to `min(8, num_cpus)`'))
 parser.add_argument('--device', type=str, default=None,
                     help='Device to use. Like cuda, cuda:0 or cpu')
-parser.add_argument('--dims', type=int, default=2048,
-                    choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
-                    help=('Dimensionality of Inception features to use. '
-                          'By default, uses pool3 features'))
+# parser.add_argument('--dims', type=int, default=2048,
+#                     choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
+#                     help=('Dimensionality of Inception features to use. '
+#                           'By default, uses pool3 features'))
 parser.add_argument('path', type=str, nargs=2,
                     default=['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results'],
                     help=('Paths to the generated images or '
@@ -62,24 +65,36 @@ parser.add_argument('path', type=str, nargs=2,
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}
 
+def get_tensor(normalize=True, toTensor=True):
+    transform_list = []
+    if toTensor:
+        transform_list += [torchvision.transforms.ToTensor()]
+
+    if normalize:
+        transform_list += [torchvision.transforms.Normalize((0.5, 0.5, 0.5),
+                                                (0.5, 0.5, 0.5))]
+    return torchvision.transforms.Compose(transform_list)
 
 class ImagePathDataset(torch.utils.data.Dataset):
     def __init__(self, files, transforms=None):
         self.files = files
         self.transforms = transforms
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        _, self.preprocess = clip.load("ViT-B/32", device=device)
-
+        # _, self.preprocess = clip.load("ViT-B/32", device=device)
+        # self.preprocess
+        # eval_transform = transforms.Compose([transforms.ToTensor(),
+        #                                  transforms.Resize(112),
+        #                                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, i):
         path = self.files[i]
-        image = self.preprocess(Image.open(path)).unsqueeze(0)
+        image = get_tensor()(Image.open(path).convert('RGB').resize((112,112))).unsqueeze(0)
         return image
 
 
-def get_activations(files, model, batch_size=50, dims=2048, device='cpu',
+def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
                     num_workers=1):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
@@ -115,19 +130,26 @@ def get_activations(files, model, batch_size=50, dims=2048, device='cpu',
     pred_arr = np.empty((len(files), 512))
 
     start_idx = 0
-
+    
+    face_pool_1 = torch.nn.AdaptiveAvgPool2d((256, 256))
+    face_pool_2 = torch.nn.AdaptiveAvgPool2d((112, 112))
     for batch in tqdm(dataloader):
-        batch = batch.to(device)
-
+        batch = batch.to(device).squeeze(1)
+        # breakpoint()
         with torch.no_grad():
-            pred = model(batch)[0]
+            # x = face_pool_1(batch)  if batch.shape[2]!=256 else  batch # (1) resize to 256 if needed
+            # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
+            # x = face_pool_2(x) # (3) resize to 112 to fit pre-trained model
+            # breakpoint()
+            pred = model(batch  )[0]
+        # breakpoint()
+        # # If model output is not scalar, apply global spatial average pooling.
+        # # This happens if you choose a dimensionality not equal 2048.
+        # if pred.size(2) != 1 or pred.size(3) != 1:
+        #     pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
 
-        # If model output is not scalar, apply global spatial average pooling.
-        # This happens if you choose a dimensionality not equal 2048.
-        if pred.size(2) != 1 or pred.size(3) != 1:
-            pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
-
-        pred = pred.squeeze(3).squeeze(2).cpu().numpy()
+        # pred = pred.squeeze(3).squeeze(2).cpu().numpy()
+        pred = pred.cpu().numpy()
 
         pred_arr[start_idx:start_idx + pred.shape[0]] = pred
 
@@ -214,7 +236,7 @@ def calculate_activation_statistics(files, model, batch_size=50, dims=2048,
     return mu, sigma
 
 
-def compute_statistics_of_path(path, model, batch_size, dims, device,
+def compute_features_wrapp(path, model, batch_size, dims, device,
                                num_workers=1):
     if path.endswith('.npz'):
         with np.load(path) as f:
@@ -223,29 +245,64 @@ def compute_statistics_of_path(path, model, batch_size, dims, device,
         path = pathlib.Path(path)
         files = sorted([file for ext in IMAGE_EXTENSIONS
                        for file in path.glob('*.{}'.format(ext))])
-        m, s = calculate_activation_statistics(files, model, batch_size,
+        # Extract all numbers before the dot using regular expression
+        # breakpoint()
+        pattern = r'[_\/.-]'
+
+        # Split the file path using the pattern
+        parts = [re.split(pattern, str(file.name)) for file in files]
+        # breakpoint()
+        # Filter out non-numeric parts and convert to integers
+        numbers =[[int(par) for par in part if par.isdigit()] for part in parts]
+        
+        numbers= [ num[0] for num in numbers if len(num)>0]
+        if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
+            numbers = [num-29000 for num in numbers] # celeb
+        
+        pred_arr = compute_features(files, model, batch_size,
                                                dims, device, num_workers)
 
-    return m, s
+    return pred_arr,numbers
 
 
-def calculate_fid_given_paths(paths, batch_size, device, dims, num_workers=1):
+def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     """Calculates the FID of two paths"""
     for p in paths:
         if not os.path.exists(p):
             raise RuntimeError('Invalid path: %s' % p)
 
-    block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
+    # block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
 
-    model = InceptionV3([block_idx]).to(device)
+    # model = InceptionV3([block_idx]).to(device)
+    CosFace  = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
+    path="/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
+    # CosFace.load_state_dict(torch.load('eval_tool/Face_rec_models/backbone.pth'))
+    CosFace.load_state_dict(torch.load(path))
+    CosFace.eval()
+    CosFace.to(device)
+    
 
-    m1, s1 = compute_statistics_of_path(paths[0], model, batch_size,
+    feat1,ori_lab = compute_features_wrapp(paths[0], CosFace, batch_size,
                                         dims, device, num_workers)
-    m2, s2 = compute_statistics_of_path(paths[1], model, batch_size,
+    feat2,swap_lab = compute_features_wrapp(paths[1], CosFace, batch_size,
                                         dims, device, num_workers)
-    fid_value = calculate_frechet_distance(m1, s1, m2, s2)
+    # dot produc to get similarity
+    # breakpoint()
+    dot_prod= np.dot(feat2,feat1.T)
+    pred= np.argmax(dot_prod,axis=1)
+    # find accuracy of top 1 and top 5
+    top1 = np.sum(np.argmax(dot_prod,axis=1)==swap_lab)/len(swap_lab)
+    
+    top5_predictions = np.argsort(dot_prod, axis=1)[:, -5:]  # Get indices of top-5 predictions
+    top5_correct = np.sum(np.any(top5_predictions == np.array(swap_lab)[:, np.newaxis], axis=1))
+    top5 = top5_correct / len(swap_lab)  # Top-5 accuracy
+    # breakpoint()
+    # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
+    feat_sel=feat1[swap_lab]
+    Mean_dot_prod= np.mean(np.diagonal(np.dot(feat_sel,feat2.T)))
 
-    return fid_value
+    # breakpoint()
+    return top1,top5,Mean_dot_prod
 
 
 def main():
@@ -262,13 +319,14 @@ def main():
     else:
         num_workers = args.num_workers
 
-    fid_value = calculate_fid_given_paths(args.path,
+    top1,top5,Mean_dot_prod= calculate_id_given_paths(args.path,
                                           args.batch_size,
                                           device,
-                                          args.dims,
+                                          2048,
                                           num_workers)
-    print('FID: ', fid_value)
-
+    print('Top-1 accuracy: {:.2f}%'.format(top1 * 100))
+    print('Top-5 accuracy: {:.2f}%'.format(top5 * 100))
+    print('Mean ID feat:  {:.2f}'.format(Mean_dot_prod))
 
 if __name__ == '__main__':
     main()

@@ -1,11 +1,13 @@
 import argparse, os, sys, glob
 import cv2
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+
 import torch
 import numpy as np
 from omegaconf import OmegaConf
-from PIL import Image
+from PIL import Image, ImageChops
 from tqdm import tqdm, trange
-# from imwatermark import WatermarkEncoder
+from imwatermark import WatermarkEncoder
 from itertools import islice
 from einops import rearrange
 from torchvision.utils import make_grid
@@ -20,18 +22,14 @@ from ldm.models.diffusion.plms import PLMSSampler
 
 from diffusers.pipelines.stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 from transformers import AutoFeatureExtractor
-
-from ldm.data.test_bench_dataset import COCOImageDataset
-from ldm.data.test_bench_dataset import CelebAdataset
 import clip
 from torchvision.transforms import Resize
-# load safety model
+wm = "Paint-by-Example"
+wm_encoder = WatermarkEncoder()
+wm_encoder.set_watermark('bytes', wm.encode('utf-8'))
 safety_model_id = "CompVis/stable-diffusion-safety-checker"
 safety_feature_extractor = AutoFeatureExtractor.from_pretrained(safety_model_id)
 safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
-
-#set cuda device 3
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 
@@ -109,23 +107,36 @@ def check_safety(x_image):
             x_checked_image[i] = load_replacement(x_checked_image[i])
     return x_checked_image, has_nsfw_concept
 
+def get_tensor(normalize=True, toTensor=True):
+    transform_list = []
+    if toTensor:
+        transform_list += [torchvision.transforms.ToTensor()]
+
+    if normalize:
+        transform_list += [torchvision.transforms.Normalize((0.5, 0.5, 0.5),
+                                                (0.5, 0.5, 0.5))]
+    return torchvision.transforms.Compose(transform_list)
+
+def get_tensor_clip(normalize=True, toTensor=True):
+    transform_list = []
+    if toTensor:
+        transform_list += [torchvision.transforms.ToTensor()]
+
+    if normalize:
+        transform_list += [torchvision.transforms.Normalize((0.48145466, 0.4578275, 0.40821073),
+                                                (0.26862954, 0.26130258, 0.27577711))]
+    return torchvision.transforms.Compose(transform_list)
+
 
 def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--prompt",
-        type=str,
-        nargs="?",
-        default="a photograph of an astronaut riding a horse",
-        help="the prompt to render"
-    )
-    parser.add_argument(
         "--outdir",
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results/test_bench"
+        default="outputs/txt2img-samples"
     )
     parser.add_argument(
         "--skip_grid",
@@ -147,11 +158,6 @@ def main():
         "--plms",
         action='store_true',
         help="use plms sampling",
-    )
-    parser.add_argument(
-        "--laion400m",
-        action='store_true',
-        help="uses the LAION400M model",
     )
     parser.add_argument(
         "--fixed_code",
@@ -183,6 +189,12 @@ def main():
         help="image width, in pixel space",
     )
     parser.add_argument(
+        "--n_imgs",
+        type=int,
+        default=100,
+        help="image width, in pixel space",
+    )
+    parser.add_argument(
         "--C",
         type=int,
         default=4,
@@ -197,8 +209,8 @@ def main():
     parser.add_argument(
         "--n_samples",
         type=int,
-        default=10,
-        help="how many samples to produce for each given prompt. A.k.a. batch size",
+        default=1,
+        help="how many samples to produce for each given reference image. A.k.a. batch size",
     )
     parser.add_argument(
         "--n_rows",
@@ -213,20 +225,15 @@ def main():
         help="unconditional guidance scale: eps = eps(x, empty) + scale * (eps(x, cond) - eps(x, empty))",
     )
     parser.add_argument(
-        "--from-file",
-        type=str,
-        help="if specified, load prompts from this file",
-    )
-    parser.add_argument(
         "--config",
         type=str,
-        default="configs/v2.yaml",
+        default="configs/v2_debug.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="models/Paint-by-Example/finetune_with_Arcface_features_clip_avg/PBE/celbA/2023-09-18T22-18-23_v2/checkpoints/last.ckpt",
+        default="/home/sanoojan/Paint_for_swap/models/Paint-by-Example/finetune/PBE/celebA/2023-09-13T22-14-47_v2/checkpoints/last.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(
@@ -236,25 +243,32 @@ def main():
         help="the seed (for reproducible sampling)",
     )
     parser.add_argument(
-        "--rank",
-        type=int,
-        default=0,
-        help="the seed (for reproducible sampling)",
-    )
-    parser.add_argument(
         "--precision",
         type=str,
         help="evaluate at this precision",
         choices=["full", "autocast"],
         default="autocast"
     )
+    parser.add_argument(
+        "--image_path",
+        type=str,
+        help="evaluate at this precision",
+        default="/home/sanoojan/e4s/data/FaceData/CelebAMask-HQ/CelebA-HQ-img/2.jpg"
+    )
+    parser.add_argument(
+        "--mask_path",
+        type=str,
+        help="evaluate at this precision",
+        default="/home/sanoojan/e4s/data/FaceData/CelebAMask-HQ/CelebA-HQ-mask/0/00002_skin.png"
+    )
+    parser.add_argument(
+        "--reference_path",
+        type=str,
+        help="evaluate at this precision",
+        default="/home/sanoojan/e4s/data/FaceData/CelebAMask-HQ/CelebA-HQ-img/3.jpg"
+    )
     opt = parser.parse_args()
 
-    if opt.laion400m:
-        print("Falling back to LAION 400M model...")
-        opt.config = "configs/latent-diffusion/txt2img-1p4B-eval.yaml"
-        opt.ckpt = "models/ldm/text2img-large/model.ckpt"
-        opt.outdir = "outputs/txt2img-samples-laion400m"
 
     seed_everything(opt.seed)
 
@@ -275,80 +289,80 @@ def main():
 
     batch_size = opt.n_samples
     n_rows = opt.n_rows if opt.n_rows > 0 else batch_size
-    if not opt.from_file:
-        prompt = opt.prompt
-        assert prompt is not None
-        data = [batch_size * [prompt]]
 
-    else:
-        print(f"reading prompts from {opt.from_file}")
-        with open(opt.from_file, "r") as f:
-            data = f.read().splitlines()
-            data = list(chunk(data, batch_size))
-
-    sample_path = os.path.join(outpath, "samples")
+    sample_path = os.path.join(outpath, "source")
     result_path = os.path.join(outpath, "results")
     grid_path=os.path.join(outpath, "grid")
     os.makedirs(sample_path, exist_ok=True)
     os.makedirs(result_path, exist_ok=True)
     os.makedirs(grid_path, exist_ok=True)
-    base_count = len(os.listdir(sample_path))
-    grid_count = len(os.listdir(outpath)) - 1
-
- 
-
-    # test_dataset=COCOImageDataset(test_bench_dir='test_bench') 
-    #read config file :configs/v2.yaml
-    conf_file=OmegaConf.load('configs/v2.yaml')
-    # breakpoint()
-    test_args=conf_file.data.params.test.params
-    
-    test_dataset=CelebAdataset(split='test',**test_args)
-    test_dataloader= torch.utils.data.DataLoader(test_dataset, 
-                                        batch_size=batch_size, 
-                                        num_workers=4, 
-                                        pin_memory=True, 
-                                        shuffle=False,#sampler=train_sampler, 
-                                        drop_last=True)
-
-
-
-
+  
 
     start_code = None
     if opt.fixed_code:
         start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
 
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
-    with torch.no_grad():
-        with precision_scope("cuda"):
-            with model.ema_scope():
-                all_samples = list()
-                for test_batch, test_model_kwargs,segment_id_batch in test_dataloader:
-                    test_model_kwargs={n:test_model_kwargs[n].to(device,non_blocking=True) for n in test_model_kwargs }
+    
+    USE_HARD_CODED=True
+    GEN_NUMS=10
+    
+    if not USE_HARD_CODED:
+        GEN_NUMS=opt.n_samples
+    for im in range(GEN_NUMS):
+        #image_path="/home/sanoojan/e4s/data/FaceData/CelebAMask-HQ/CelebA-HQ-img/2.jpg"
+        #mask_path /home/sanoojan/e4s/data/FaceData/CelebAMask-HQ/CelebA-HQ-mask/0/00002_skin.png
+        # Hard coded here
+        target_path=opt.image_path[:-5]+str(im)+'.jpg'  
+        src_path=opt.reference_path[:-5]+str(im+1)+'.jpg' 
+        mask_path=opt.mask_path[:-10]+str(im)+'_skin.png'
+        mask_mouth_path=opt.mask_path[:-10]+str(im)+'_mouth.png'
+        
+        if not USE_HARD_CODED:
+            
+            target_path=opt.image_path
+            src_path=opt.reference_path
+            mask_path=opt.mask_path
+        
+        with torch.no_grad():
+            with precision_scope("cuda"):
+                with model.ema_scope():
+                    filename=os.path.basename(target_path)
+                    img_p = Image.open(target_path).convert("RGB").resize((512,512))
+                    image_tensor = get_tensor()(img_p)
+                    image_tensor = image_tensor.unsqueeze(0)
+                    ref_p = Image.open(src_path).convert("RGB").resize((224,224))
+                    ref_tensor=get_tensor_clip()(ref_p)
+                    ref_tensor = ref_tensor.unsqueeze(0)
+                    mask=Image.open(mask_path).resize((512,512)).convert("L")
+                    try:
+                        mask_mouth=Image.open(mask_mouth_path).convert("L").resize((512, 512))
+                        mask=ImageChops.subtract(mask,mask_mouth)
+                    except:
+                        print("no mouth mask")
+                    # breakpoint()
+                    # .resize((image_tensor.shape[2],image_tensor.shape[3]))
+                    mask = np.array(mask)[None,None]
+                    mask = 1 - mask.astype(np.float32)/255.0
+                    mask[mask < 0.5] = 0
+                    mask[mask >= 0.5] = 1
+                    mask_tensor = torch.from_numpy(mask)
+                    # breakpoint()
+                    inpaint_image = image_tensor*mask_tensor
+                    test_model_kwargs={}
+                    test_model_kwargs['inpaint_mask']=mask_tensor.to(device)
+                    test_model_kwargs['inpaint_image']=inpaint_image.to(device)
+                    ref_tensor=ref_tensor.to(device)
                     uc = None
                     if opt.scale != 1.0:
-                        uc = model.learnable_vector.repeat(test_batch.shape[0],1,1)
-                    # c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))
-                    c2=model.face_ID_model.extract_feats(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))[0]
-                    c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16)) #-->c:[4,1,1024]
-                    c = model.proj_out(c) #-->c:[4,1,768]
-                    c2 = model.ID_proj_out(c2) #-->c:[4,768]
-                    c2 = c2.unsqueeze(1) #-->c:[4,1,768]
-                    c=(c2+c)/2.0
-                    c = c.float()
-                    
-                    
-                    if c.shape[-1]==1024:
-                        c = model.proj_out(c)
-                    if len(c.shape)==2:
-                        c = c.unsqueeze(1)
-                    inpaint_image=test_model_kwargs['inpaint_image']
+                        uc = model.learnable_vector
+                    c = model.get_learned_conditioning(ref_tensor.to(torch.float16))
+                    c = model.proj_out(c)
                     inpaint_mask=test_model_kwargs['inpaint_mask']
                     z_inpaint = model.encode_first_stage(test_model_kwargs['inpaint_image'])
                     z_inpaint = model.get_first_stage_encoding(z_inpaint).detach()
                     test_model_kwargs['inpaint_image']=z_inpaint
-                    test_model_kwargs['inpaint_mask']=Resize([z_inpaint.shape[-1],z_inpaint.shape[-1]])(test_model_kwargs['inpaint_mask'])
+                    test_model_kwargs['inpaint_mask']=Resize([z_inpaint.shape[-2],z_inpaint.shape[-1]])(test_model_kwargs['inpaint_mask'])
 
                     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                     samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
@@ -366,6 +380,7 @@ def main():
                     x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
                     x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
 
+                    x_checked_image, has_nsfw_concept = check_safety(x_samples_ddim)
                     x_checked_image=x_samples_ddim
                     x_checked_image_torch = torch.from_numpy(x_checked_image).permute(0, 3, 1, 2)
 
@@ -382,45 +397,39 @@ def main():
                             
 
                             all_img=[]
-                            all_img.append(un_norm(test_batch[i]).cpu())
+                            all_img.append(un_norm(image_tensor[i]).cpu())
                             all_img.append(un_norm(inpaint_image[i]).cpu())
-                            ref_img=test_model_kwargs['ref_imgs'].squeeze(1)
-                            ref_img=Resize([512,512])(ref_img)
+                            ref_img=ref_tensor
+                            ref_img=Resize([opt.H, opt.W])(ref_img)
                             all_img.append(un_norm_clip(ref_img[i]).cpu())
                             all_img.append(x_sample)
                             grid = torch.stack(all_img, 0)
                             grid = make_grid(grid)
                             grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
                             img = Image.fromarray(grid.astype(np.uint8))
-                            img.save(os.path.join(grid_path, 'grid-'+segment_id_batch[i]+'.png'))
+                            img = put_watermark(img, wm_encoder)
+                            img.save(os.path.join(grid_path, 'grid-'+filename[:-4]+'_'+str(opt.seed)+'.png'))
                             
-
 
 
                             x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                             img = Image.fromarray(x_sample.astype(np.uint8))
-                            img.save(os.path.join(result_path, segment_id_batch[i]+".png"))
+                            img = put_watermark(img, wm_encoder)
+                            img.save(os.path.join(result_path, filename[:-4]+'_'+str(opt.seed)+".png"))
                             
                             mask_save=255.*rearrange(un_norm(inpaint_mask[i]).cpu(), 'c h w -> h w c').numpy()
                             mask_save= cv2.cvtColor(mask_save,cv2.COLOR_GRAY2RGB)
                             mask_save = Image.fromarray(mask_save.astype(np.uint8))
-                            mask_save.save(os.path.join(sample_path, segment_id_batch[i]+"_mask.png"))
+                            mask_save.save(os.path.join(sample_path, filename[:-4]+'_'+str(opt.seed)+"_mask.png"))
                             GT_img=255.*rearrange(all_img[0], 'c h w -> h w c').numpy()
                             GT_img = Image.fromarray(GT_img.astype(np.uint8))
-                            GT_img.save(os.path.join(sample_path, segment_id_batch[i]+"_GT.png"))
+                            GT_img.save(os.path.join(sample_path, filename[:-4]+'_'+str(opt.seed)+"_GT.png"))
                             inpaint_img=255.*rearrange(all_img[1], 'c h w -> h w c').numpy()
                             inpaint_img = Image.fromarray(inpaint_img.astype(np.uint8))
-                            inpaint_img.save(os.path.join(sample_path, segment_id_batch[i]+"_inpaint.png"))
+                            inpaint_img.save(os.path.join(sample_path, filename[:-4]+'_'+str(opt.seed)+"_inpaint.png"))
                             ref_img=255.*rearrange(all_img[2], 'c h w -> h w c').numpy()
                             ref_img = Image.fromarray(ref_img.astype(np.uint8))
-                            ref_img.save(os.path.join(sample_path, segment_id_batch[i]+"_ref.png"))
-                            base_count += 1
-
-
-
-                    if not opt.skip_grid:
-                        all_samples.append(x_checked_image_torch)
-
+                            ref_img.save(os.path.join(sample_path, filename[:-4]+'_'+str(opt.seed)+"_ref.png"))
 
     print(f"Your samples are ready and waiting for you here: \n{outpath} \n"
           f" \nEnjoy.")
