@@ -309,7 +309,9 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     # breakpoint()
     # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
     feat1=feat1[swap_lab]
-    diff_feat = np.abs(feat1-feat2)
+    # find l2 distance
+    diff_feat=np.power(feat1-feat2,2)
+    # diff_feat = np.abs(feat1-feat2)
     Value=np.mean(diff_feat[:,0],axis=0)+np.mean(diff_feat[:,1],axis=0)+np.mean(diff_feat[:,2],axis=0) 
     return Value
 

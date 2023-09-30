@@ -63,7 +63,7 @@ def get_parser(**parser_kwargs):
         metavar="base_config.yaml",
         help="paths to base configs. Loaded from left-to-right. "
              "Parameters can be overwritten or added with command-line options of the form `--key value`.",
-        default=["configs/v2_debug.yaml"],
+        default=["configs/v3_Landmark_cond.yaml"],
     )
     parser.add_argument(
         "-t",

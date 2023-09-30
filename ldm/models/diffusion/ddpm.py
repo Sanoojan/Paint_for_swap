@@ -29,10 +29,13 @@ import time
 import random
 from torch.autograd import Variable
 from src.Face_models.encoders.model_irse import Backbone
+import dlib
 
 __conditioning_keys__ = {'concat': 'c_concat',
                          'crossattn': 'c_crossattn',
                          'adm': 'y'}
+
+
 
 
 def disabled_train(self, mode=True):
@@ -67,6 +70,8 @@ class IDLoss(nn.Module):
         x_feats = self.facenet(x, multi_scale=True)
         # x_feats = self.facenet(x) # changed by sanoojan
         return x_feats
+
+    
 
     def forward(self, y_hat, y):
         n_samples = y.shape[0]
@@ -522,12 +527,24 @@ class LatentDiffusion(DDPM):
         super().__init__(conditioning_key=conditioning_key, *args, **kwargs)
         self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
         self.proj_out=nn.Linear(1024, 768)
-        self.ID_proj_out=nn.Linear(200704, 768)
+        
         self.concat_mode = concat_mode
         self.cond_stage_trainable = cond_stage_trainable
         self.cond_stage_key = cond_stage_key
         
+        self.clip_weight=cond_stage_config.other_params.clip_weight
+        self.ID_weight=cond_stage_config.other_params.ID_weight
+        self.Landmark_cond=cond_stage_config.other_params.Landmark_cond
+        self.Landmarks_weight=cond_stage_config.other_params.Landmarks_weight
         
+        if self.ID_weight>0:
+            self.ID_proj_out=nn.Linear(200704, 768)
+            self.instantiate_IDLoss(cond_stage_config)
+            
+        if self.Landmark_cond:
+            self.detector = dlib.get_frontal_face_detector()
+            self.predictor = dlib.shape_predictor("Other_dependencies/DLIB_landmark_det/shape_predictor_68_face_landmarks.dat")
+            self.landmark_proj_out=nn.Linear(136, 768)
         try:
             self.num_downs = len(first_stage_config.params.ddconfig.ch_mult) - 1
         except:
@@ -538,7 +555,7 @@ class LatentDiffusion(DDPM):
             self.register_buffer('scale_factor', torch.tensor(scale_factor))
         self.instantiate_first_stage(first_stage_config)
         self.instantiate_cond_stage(cond_stage_config)
-        self.instantiate_IDLoss(cond_stage_config)
+        
         self.cond_stage_forward = cond_stage_forward
         self.clip_denoised = False
         self.bbox_tokenizer = None  
@@ -588,18 +605,18 @@ class LatentDiffusion(DDPM):
 
     def instantiate_IDLoss(self, config):
         # Need to modify @sanoojan
-        if not self.cond_stage_trainable:
-            model = IDLoss(self.opts)
-            self.face_ID_model = model.eval()
-            self.face_ID_model.train = disabled_train
-            for param in self.face_ID_model.parameters():
-                param.requires_grad = False
+        # if not self.cond_stage_trainable:
+        model = IDLoss(config)
+        self.face_ID_model = model.eval()
+        self.face_ID_model.train = disabled_train
+        for param in self.face_ID_model.parameters():
+            param.requires_grad = False
             
-        else:
-            assert config != '__is_first_stage__'
-            assert config != '__is_unconditional__'
-            model = IDLoss(config)
-            self.face_ID_model = model
+        # else:
+        #     assert config != '__is_first_stage__'
+        #     assert config != '__is_unconditional__'
+        #     model = IDLoss(config)
+        #     self.face_ID_model = model.eval()  # currently not training and not training is better
     
     
     def instantiate_cond_stage(self, config):
@@ -657,7 +674,53 @@ class LatentDiffusion(DDPM):
             assert hasattr(self.cond_stage_model, self.cond_stage_forward)
             c = getattr(self.cond_stage_model, self.cond_stage_forward)(c)
         return c
+    
+    def conditioning_with_feat(self,x,landmarks=None):
+        c=0
+        c2=0
+        if self.ID_weight>0:
+            c2=self.face_ID_model.extract_feats(x)[0]
+            c2 = self.ID_proj_out(c2) #-->c:[4,768]
+            c2 = c2.unsqueeze(1) #-->c:[4,1,768]
+        if self.clip_weight>0:
+            c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
+            c = self.proj_out(c) #-->c:[4,1,768]
+        landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
+        c=(c*self.clip_weight+c2*self.ID_weight+landmarks *self.Landmarks_weight)/(self.clip_weight+self.ID_weight+self.Landmarks_weight)
+        # c = c.float()
+        
 
+        return c
+
+    def get_landmarks(self,x):
+        def un_norm(x):
+            return (x+1.0)/2.0
+        if self.Landmark_cond and x is not None:
+            # pass
+            # # Detect faces in an image
+            #convert to 8bit image
+            x=255.0*un_norm(x).permute(0,2,3,1).cpu().numpy()
+            x=x.astype(np.uint8)
+            Landmarks_all=[]    
+            for i in range(len(x)):
+                faces = self.detector(x[i],1)
+                if len(faces)==0:
+                    Landmarks_all.append(torch.zeros(1,136))
+                    continue
+                shape = self.predictor(x[i], faces[0])
+                t = list(shape.parts())
+                a = []
+                for tt in t:
+                    a.append([tt.x, tt.y])
+                lm = np.array(a)
+                lm = lm.reshape(1, 136)
+                Landmarks_all.append(lm)
+        Landmarks_all=np.concatenate(Landmarks_all,axis=0)
+        Landmarks_all=torch.tensor(Landmarks_all).float().to(self.device)
+        Landmarks_all=self.landmark_proj_out(Landmarks_all)
+        # normalize Landmarks_all
+        
+        return Landmarks_all
 
     def meshgrid(self, h, w):
         y = torch.arange(0, h).view(h, 1, 1).repeat(1, w, 1)
@@ -750,7 +813,7 @@ class LatentDiffusion(DDPM):
 
     @torch.no_grad()
     def get_input(self, batch, k, return_first_stage_outputs=False, force_c_encode=False,
-                  cond_key=None, return_original_cond=False, bs=None,get_mask=False,get_reference=False):
+                  cond_key=None, return_original_cond=False, bs=None,get_mask=False,get_reference=False,get_landmarks_out=False):
         
         x,inpaint,mask,reference = super().get_input(batch, k)
         #x : Original Image
@@ -763,6 +826,9 @@ class LatentDiffusion(DDPM):
             mask = mask[:bs]
             reference = reference[:bs]
         x = x.to(self.device)
+        
+        landmarks=self.get_landmarks(x)
+        
         encoder_posterior = self.encode_first_stage(x)
         z = self.get_first_stage_encoding(encoder_posterior).detach()
         encoder_posterior_inpaint = self.encode_first_stage(inpaint)
@@ -789,13 +855,8 @@ class LatentDiffusion(DDPM):
                     # import pudb; pudb.set_trace()
                     c = self.get_learned_conditioning(xc)
                 else:
-                    c2=self.face_ID_model.extract_feats(xc.to(self.device))[0]
-                    c = self.get_learned_conditioning(xc.to(self.device)) #-->c:[4,1,1024]
-                    c = self.proj_out(c) #-->c:[4,1,768]
-                    c2 = self.ID_proj_out(c2) #-->c:[4,768]
-                    c2 = c2.unsqueeze(1) #-->c:[4,1,768]
-                    c=(c2+c)/2.0
-                    c = c.float()
+                    
+                    c=self.conditioning_with_feat(xc.to(self.device),landmarks=landmarks).float()
             else:
                 c = xc #-->
             if bs is not None:
@@ -825,6 +886,8 @@ class LatentDiffusion(DDPM):
             out.append(mask)
         if get_reference:
             out.append(reference)
+        if get_landmarks_out:
+            out.append(landmarks)
         return out
         
     @torch.no_grad()
@@ -991,22 +1054,17 @@ class LatentDiffusion(DDPM):
             return self.first_stage_model.encode(x)
 
     def shared_step(self, batch, **kwargs):
-        x, c = self.get_input(batch, self.first_stage_key)
-        loss = self(x, c)
+        x, c ,landmarks= self.get_input(batch, self.first_stage_key,get_landmarks_out=True)
+        loss = self(x, c,landmarks=landmarks)
         return loss
 
-    def forward(self, x, c, *args, **kwargs):
+    def forward(self, x, c,landmarks=None, *args, **kwargs):
         t = torch.randint(0, self.num_timesteps, (x.shape[0],), device=self.device).long()
         self.u_cond_prop=random.uniform(0, 1)
         if self.model.conditioning_key is not None:
             assert c is not None
             if self.cond_stage_trainable:
-                c2=self.face_ID_model.extract_feats(c)[0]
-                c = self.get_learned_conditioning(c) #-->c:[4,1,1024]
-                c = self.proj_out(c) #-->c:[4,1,768]
-                c2 = self.ID_proj_out(c2) #-->c:[4,768]
-                c2 = c2.unsqueeze(1) #-->c:[4,1,768]
-                c=(c2+c)/2.0
+                c=self.conditioning_with_feat(c,landmarks=landmarks)
                     
             if self.shorten_cond_schedule:  # TODO: drop this option
                 tc = self.cond_ids[t].to(self.device)

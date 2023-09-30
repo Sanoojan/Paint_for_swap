@@ -12,8 +12,7 @@
 # --scale_lr False
 
 CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
---logdir models/Paint-by-Example/finetune_with_Arcface_features_clip_avg/PBE/celebA/ \
+--logdir models/Paint-by-Example/Arcface_features_clip_avg_landmarks/PBE/celebA/ \
 --pretrained_model checkpoints/model.ckpt \
---base configs/v2.yaml \
---scale_lr False \
---resume "models/Paint-by-Example/finetune_with_Arcface_features_clip_avg/PBE/celebA/2023-09-18T22-18-23_v2/checkpoints/epoch=000009.ckpt" 
+--base configs/v3_Landmark_cond.yaml \
+--scale_lr False 

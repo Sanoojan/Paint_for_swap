@@ -306,8 +306,7 @@ def main():
     if not USE_HARD_CODED:
         GEN_NUMS=opt.n_samples
     for im in range(GEN_NUMS):
-        #image_path="/home/sanoojan/e4s/data/FaceData/CelebAMask-HQ/CelebA-HQ-img/2.jpg"
-        #mask_path /home/sanoojan/e4s/data/FaceData/CelebAMask-HQ/CelebA-HQ-mask/0/00002_skin.png
+
         # Hard coded here
         target_path=opt.image_path[:-5]+str(im)+'.jpg'  
         src_path=opt.reference_path[:-5]+str(im+1)+'.jpg' 
@@ -352,15 +351,8 @@ def main():
                     uc = None
                     if opt.scale != 1.0:
                         uc = model.learnable_vector
-                    # c = model.get_learned_conditioning(ref_tensor.to(torch.float16))
-                    # c = model.proj_out(c)
-                    
-                    c2=model.face_ID_model.extract_feats(ref_tensor.to(torch.float16))[0]
-                    c = model.get_learned_conditioning(ref_tensor.to(torch.float16)) #-->c:[4,1,1024]
-                    c = model.proj_out(c) #-->c:[4,1,768]
-                    c2 = model.ID_proj_out(c2) #-->c:[4,768]
-                    c2 = c2.unsqueeze(1) #-->c:[4,1,768]
-                    c=(c2+c)/2.0
+  
+                    c=model.conditioning_with_feat(ref_tensor.to(torch.float16),target=image_tensor)
                     inpaint_mask=test_model_kwargs['inpaint_mask']
                     z_inpaint = model.encode_first_stage(test_model_kwargs['inpaint_image'])
                     z_inpaint = model.get_first_stage_encoding(z_inpaint).detach()

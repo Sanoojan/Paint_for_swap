@@ -320,23 +320,22 @@ def main():
         start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
 
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
+    sample=0
     with torch.no_grad():
         with precision_scope("cuda"):
             with model.ema_scope():
                 all_samples = list()
                 for test_batch, test_model_kwargs,segment_id_batch in test_dataloader:
+                    # sample+=10
+                    # if sample<500:
+                        # continue
                     test_model_kwargs={n:test_model_kwargs[n].to(device,non_blocking=True) for n in test_model_kwargs }
                     uc = None
                     if opt.scale != 1.0:
                         uc = model.learnable_vector.repeat(test_batch.shape[0],1,1)
                     # c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))
-                    c2=model.face_ID_model.extract_feats(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))[0]
-                    c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16)) #-->c:[4,1,1024]
-                    c = model.proj_out(c) #-->c:[4,1,768]
-                    c2 = model.ID_proj_out(c2) #-->c:[4,768]
-                    c2 = c2.unsqueeze(1) #-->c:[4,1,768]
-                    c=(c2+c)/2.0
-                    c = c.float()
+                    landmarks=model.get_landmarks(test_batch)
+                    c=model.conditioning_with_feat(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16),landmarks=landmarks).float()
                     
                     
                     if c.shape[-1]==1024:

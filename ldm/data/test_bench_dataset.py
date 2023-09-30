@@ -35,7 +35,9 @@ celelbAHQ_label_list = ['skin', 'nose', 'eye_g', 'l_eye', 'r_eye',
                         'l_brow', 'r_brow', 'l_ear', 'r_ear', 'mouth',
                         'u_lip', 'l_lip', 'hair', 'hat', 'ear_r',
                         'neck_l', 'neck', 'cloth']
-preserve=[1,2,4,5,8,9 ]
+# 1:skin, 2:nose, 3:eye_g, 4:l_eye, 5:r_eye, 6:l_brow, 7:r_brow, 8:l_ear, 9:r_ear, 
+# 10:mouth, 11:u_lip, 12:l_lip, 13:hair, 14:hat, 15:ear_r, 16:neck_l, 17:neck, 18:cloth
+preserve=[1,2,4,5,8,9,17 ] #comes from source
 def bbox_process(bbox):
     x_min = int(bbox[0])
     y_min = int(bbox[1])
@@ -229,7 +231,7 @@ class CelebAdataset(data.Dataset):
         mask_img = np.array(mask_img)  # Convert the label to a NumPy array if it's not already
 
         # Create a mask to preserve values in the 'preserve' list
-        preserve = [1, 2, 4, 5, 8, 9]
+        preserve = [1,2,4,5,8,9,17 ]
         mask = np.isin(mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255

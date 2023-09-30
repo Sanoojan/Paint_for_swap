@@ -39,6 +39,7 @@
 # --scale 5
 
 CUDA_VISIBLE_DEVICES=2 python scripts/inference.py \
+--n_imgs 500 \
 --plms --outdir results/arcface_clip_avg \
 --config configs/v1.yaml \
 --ckpt models/Paint-by-Example/finetune_with_Arcface_features_clip_avg/PBE/celbA/2023-09-18T22-18-23_v2/checkpoints/last.ckpt \
