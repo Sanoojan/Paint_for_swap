@@ -72,10 +72,10 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenCLIPImageEmbedder
       other_params:
-        clip_weight: 0.4
-        ID_weight: 0.6
-        Landmark_cond: True
-        Landmarks_weight: 0.05
+        clip_weight: 0.0
+        ID_weight: 1.0
+        Landmark_cond: False
+        Landmarks_weight: 0.0
       
         
 

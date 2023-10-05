@@ -68,6 +68,8 @@ def get_tensor_clip(normalize=True, toTensor=True):
 
 #####
 
+# 1:skin, 2:nose, 3:eye_g, 4:l_eye, 5:r_eye, 6:l_brow, 7:r_brow, 8:l_ear, 9:r_ear, 
+# 10:mouth, 11:u_lip, 12:l_lip, 13:hair, 14:hat, 15:ear_r, 16:neck_l, 17:neck, 18:cloth
 
 # 19 attributes in total, skin-1,nose-2,...cloth-18, background-0
 celelbAHQ_label_list = ['skin', 'nose', 'eye_g', 'l_eye', 'r_eye',
@@ -236,7 +238,11 @@ class CelebAdataset(data.Dataset):
             A.HorizontalFlip(p=0.5),
             A.Rotate(limit=20),
             A.Blur(p=0.3),
-            A.ElasticTransform(p=0.3)
+            A.ElasticTransform(p=0.3), 
+            A.GaussNoise(p=0.3),# newly added from this line
+            A.HueSaturationValue(p=0.3),
+            A.ISONoise(p=0.3),
+            A.Solarize(p=0.3),
             ])
         # bad_list=[
         #     '1af17f3d912e9aac.txt',
@@ -322,24 +328,81 @@ class CelebAdataset(data.Dataset):
 
     
     def __getitem__(self, index):
-        # bbox_path=self.bbox_path_list[index]
-        # file_name=os.path.splitext(os.path.basename(bbox_path))[0]+'.jpg'
-        # dir_name=bbox_path.split('/')[-2]
-        # img_path=os.path.join('dataset/open-images/images',dir_name,file_name)
+
+        img_path = self.imgs[index]
+        img_p = Image.open(img_path).convert('RGB')
+     
+
+        ############
+        mask_path = self.labels[index]
+        mask_img = Image.open(mask_path).convert('L')
+        mask_img = np.array(mask_img)  # Convert the label to a NumPy array if it's not already
+
+        # Create a mask to preserve values in the 'preserve' list
+        # preserve = [1,2,4,5,8,9,17 ]
+        # preserve = [1,2,4,5,8,9 ]
+        preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # full mask to be changed
+        mask = np.isin(mask_img, preserve)
+
+        # Create a converted_mask where preserved values are set to 255
+        converted_mask = np.zeros_like(mask_img)
+        converted_mask[mask] = 255
+        # convert to PIL image
+        mask_img=Image.fromarray(converted_mask).convert('L')
+        mask_tensor=1-get_tensor(normalize=False, toTensor=True)(mask_img)
+ 
+ 
+
+        if self.load_vis_img:
+            label_vis = self.labels_vis[index]
+            label_vis = Image.open(label_vis).convert('RGB')
+            label_vis = TO_TENSOR(label_vis)
+        else:
+            label_vis = -1  # unified interface
+        
+    
+        img_p_np=cv2.imread(img_path)
+        img_p_np = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
+        ref_image_tensor=img_p_np
+        # resize mask_img
+        mask_img_r = mask_img.resize(img_p_np.shape[1::-1], Image.NEAREST)
+        mask_img_r = np.array(mask_img_r)
+        
+        # select only mask_img region from reference image
+        ref_image_tensor[mask_img_r==0]=0   # comment this if full img should be used
+    
+        
+        ref_image_tensor=self.random_trans(image=ref_image_tensor)
+        ref_image_tensor=Image.fromarray(ref_image_tensor["image"])
+        ref_image_tensor=get_tensor_clip()(ref_image_tensor)
 
 
-        # bbox_list=[]
-        # with open(bbox_path) as f:
-        #     line=f.readline()
-        #     while line:
-        #         line_split=line.strip('\n').split(" ")
-        #         bbox_temp=[]
-        #         for i in range(4):
-        #             bbox_temp.append(int(float(line_split[i])))
-        #         bbox_list.append(bbox_temp)
-        #         line=f.readline()
-        # bbox=random.choice(bbox_list)
-        # img_p = Image.open(img_path).convert("RGB")
+
+        ### Generate mask
+        image_tensor = get_tensor()(img_p)
+        W,H = img_p.size
+
+        image_tensor_cropped=image_tensor
+        mask_tensor_cropped=mask_tensor
+        image_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(image_tensor_cropped)
+        mask_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(mask_tensor_cropped)
+        inpaint_tensor_resize=image_tensor_resize*mask_tensor_resize
+   
+        return {"GT":image_tensor_resize,"inpaint_image":inpaint_tensor_resize,"inpaint_mask":mask_tensor_resize,"ref_imgs":ref_image_tensor}
+
+    # def __getitem__(self, idx):
+    #     index = self.indices[idx]
+    #     img, label, label_vis = self.load_single_image(index)
+    #     if self.flip_p > 0:
+    #         if random.random() < self.flip_p:
+    #             img = TF.hflip(img)
+    #             label = TF.hflip(label)
+           
+    #     return img, label, label_vis
+    
+    
+    def __getitem_old__(self, index):
+
         
         img_path = self.imgs[index]
         img_p = Image.open(img_path).convert('RGB')
@@ -512,15 +575,6 @@ class CelebAdataset(data.Dataset):
         
         return {"GT":image_tensor_resize,"inpaint_image":inpaint_tensor_resize,"inpaint_mask":mask_tensor_resize,"ref_imgs":ref_image_tensor}
 
-    # def __getitem__(self, idx):
-    #     index = self.indices[idx]
-    #     img, label, label_vis = self.load_single_image(index)
-    #     if self.flip_p > 0:
-    #         if random.random() < self.flip_p:
-    #             img = TF.hflip(img)
-    #             label = TF.hflip(label)
-           
-    #     return img, label, label_vis
 
     def __len__(self):
         return self.length

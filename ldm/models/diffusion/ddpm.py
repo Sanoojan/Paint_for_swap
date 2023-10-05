@@ -532,11 +532,18 @@ class LatentDiffusion(DDPM):
         self.cond_stage_trainable = cond_stage_trainable
         self.cond_stage_key = cond_stage_key
         
-        self.clip_weight=cond_stage_config.other_params.clip_weight
-        self.ID_weight=cond_stage_config.other_params.ID_weight
-        self.Landmark_cond=cond_stage_config.other_params.Landmark_cond
-        self.Landmarks_weight=cond_stage_config.other_params.Landmarks_weight
+        #check if other_params is present in cond_stage_config
+        if hasattr(cond_stage_config, 'other_params'):
         
+            self.clip_weight=cond_stage_config.other_params.clip_weight
+            self.ID_weight=cond_stage_config.other_params.ID_weight
+            self.Landmark_cond=cond_stage_config.other_params.Landmark_cond
+            self.Landmarks_weight=cond_stage_config.other_params.Landmarks_weight
+        else:
+            self.clip_weight=1
+            self.ID_weight=0
+            self.Landmark_cond=False
+            self.Landmarks_weight=0
         if self.ID_weight>0:
             self.ID_proj_out=nn.Linear(200704, 768)
             self.instantiate_IDLoss(cond_stage_config)
@@ -685,6 +692,8 @@ class LatentDiffusion(DDPM):
         if self.clip_weight>0:
             c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
             c = self.proj_out(c) #-->c:[4,1,768]
+        if landmarks is None:
+            return (c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)
         landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
         c=(c*self.clip_weight+c2*self.ID_weight+landmarks *self.Landmarks_weight)/(self.clip_weight+self.ID_weight+self.Landmarks_weight)
         # c = c.float()
@@ -827,7 +836,10 @@ class LatentDiffusion(DDPM):
             reference = reference[:bs]
         x = x.to(self.device)
         
-        landmarks=self.get_landmarks(x)
+        if self.Landmark_cond: 
+            landmarks=self.get_landmarks(x)
+        else:
+            landmarks=None
         
         encoder_posterior = self.encode_first_stage(x)
         z = self.get_first_stage_encoding(encoder_posterior).detach()

@@ -23,7 +23,7 @@ import socket
 from pytorch_lightning.plugins.environments import ClusterEnvironment,SLURMEnvironment
 
 #set cuda visible devices =3
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 def get_parser(**parser_kwargs):

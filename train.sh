@@ -12,7 +12,7 @@
 # --scale_lr False
 
 CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
---logdir models/Paint-by-Example/Arcface_features_clip_avg_landmarks/PBE/celebA/ \
+--logdir models/Paint-by-Example/Arcface_features_clip_avg_landmarks_full_face_mask_new_augs/PBE/celebA/ \
 --pretrained_model checkpoints/model.ckpt \
 --base configs/v3_Landmark_cond.yaml \
 --scale_lr False 

@@ -300,7 +300,7 @@ def main():
 
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
     
-    USE_HARD_CODED=True
+    USE_HARD_CODED=False
     GEN_NUMS=10
     
     if not USE_HARD_CODED:
@@ -352,7 +352,7 @@ def main():
                     if opt.scale != 1.0:
                         uc = model.learnable_vector
   
-                    c=model.conditioning_with_feat(ref_tensor.to(torch.float16),target=image_tensor)
+                    c=model.conditioning_with_feat(ref_tensor.to(torch.float16),landmarks=None)
                     inpaint_mask=test_model_kwargs['inpaint_mask']
                     z_inpaint = model.encode_first_stage(test_model_kwargs['inpaint_image'])
                     z_inpaint = model.get_first_stage_encoding(z_inpaint).detach()

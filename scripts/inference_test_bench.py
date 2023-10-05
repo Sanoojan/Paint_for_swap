@@ -334,7 +334,7 @@ def main():
                     if opt.scale != 1.0:
                         uc = model.learnable_vector.repeat(test_batch.shape[0],1,1)
                     # c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))
-                    landmarks=model.get_landmarks(test_batch)
+                    landmarks=model.get_landmarks(test_batch) if model.Landmark_cond else None
                     c=model.conditioning_with_feat(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16),landmarks=landmarks).float()
                     
                     
