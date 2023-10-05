@@ -36,6 +36,7 @@ from torch.nn.functional import adaptive_avg_pool2d
 from src.Face_models.encoders.model_irse import Backbone
 # import clip
 import torchvision
+from eval_tool.ID_retrieval.iresnet50 import iresnet50
 try:
     from tqdm import tqdm
 except ImportError:
@@ -141,7 +142,9 @@ def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
             # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
             # x = face_pool_2(x) # (3) resize to 112 to fit pre-trained model
             # breakpoint()
-            pred = model(batch  )[0]
+            pred = model(batch )
+            # pred = model(batch )[0] for arcface
+            
         # breakpoint()
         # # If model output is not scalar, apply global spatial average pooling.
         # # This happens if you choose a dimensionality not equal 2048.
@@ -149,6 +152,7 @@ def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
         #     pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
 
         # pred = pred.squeeze(3).squeeze(2).cpu().numpy()
+        # print(pred.shape)
         pred = pred.cpu().numpy()
 
         pred_arr[start_idx:start_idx + pred.shape[0]] = pred
@@ -256,8 +260,9 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
         numbers =[[int(par) for par in part if par.isdigit()] for part in parts]
         
         numbers= [ num[0] for num in numbers if len(num)>0]
-        if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
-            numbers = [num-29000 for num in numbers] # celeb
+        min_num= min(numbers)
+        # if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
+        numbers = [num-min_num for num in numbers] # celeb
         
         pred_arr = compute_features(files, model, batch_size,
                                                dims, device, num_workers)
@@ -272,14 +277,21 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
             raise RuntimeError('Invalid path: %s' % p)
 
     # block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
-
-    # model = InceptionV3([block_idx]).to(device)
-    CosFace  = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
-    path="/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
-    # CosFace.load_state_dict(torch.load('eval_tool/Face_rec_models/backbone.pth'))
-    CosFace.load_state_dict(torch.load(path))
+    
+    cosface_state_dict = torch.load("eval_tool/Face_rec_models/backbone.pth")
+    CosFace = iresnet50()
+    CosFace.load_state_dict(cosface_state_dict)
     CosFace.eval()
     CosFace.to(device)
+
+
+    # # model = InceptionV3([block_idx]).to(device)
+    # CosFace  = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
+    # path="/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
+    # # CosFace.load_state_dict(torch.load('eval_tool/Face_rec_models/backbone.pth'))
+    # CosFace.load_state_dict(torch.load(path))
+    # CosFace.eval()
+    # CosFace.to(device)
     
 
     feat1,ori_lab = compute_features_wrapp(paths[0], CosFace, batch_size,
@@ -299,6 +311,8 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     # breakpoint()
     # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
     feat_sel=feat1[swap_lab]
+    feat_sel=feat_sel/np.linalg.norm(feat_sel,axis=1,keepdims=True)
+    feat2=feat2/np.linalg.norm(feat2,axis=1,keepdims=True)
     Mean_dot_prod= np.mean(np.diagonal(np.dot(feat_sel,feat2.T)))
 
     # breakpoint()
