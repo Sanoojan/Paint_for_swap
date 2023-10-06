@@ -268,10 +268,10 @@ class CelebAdataset(data.Dataset):
         # convert to PIL image
         
         
-        ref_mask_img=Image.fromarray(ref_img).convert('L')
+        # ref_mask_img=Image.fromarray(ref_img).convert('L')
         ref_mask_img_r = ref_converted_mask.resize(img_p_np.shape[1::-1], Image.NEAREST)
         ref_mask_img_r = np.array(ref_mask_img_r)
-        # ref_img[ref_mask_img_r==0]=0
+        ref_img[ref_mask_img_r==0]=0
         
         ref_img=self.trans(image=ref_img)
         ref_img=Image.fromarray(ref_img["image"])

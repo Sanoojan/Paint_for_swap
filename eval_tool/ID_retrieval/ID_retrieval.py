@@ -43,6 +43,8 @@ except ImportError:
     # If tqdm is not available, provide a mock version of it
     def tqdm(x):
         return x
+import cv2
+import albumentations as A
 
 # from inception import InceptionV3
 
@@ -54,12 +56,14 @@ parser.add_argument('--num-workers', type=int,
                           'Defaults to `min(8, num_cpus)`'))
 parser.add_argument('--device', type=str, default=None,
                     help='Device to use. Like cuda, cuda:0 or cpu')
+parser.add_argument('--mask', type=bool, default=True,
+                    help='whether to use mask or not')
 # parser.add_argument('--dims', type=int, default=2048,
 #                     choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
 #                     help=('Dimensionality of Inception features to use. '
 #                           'By default, uses pool3 features'))
-parser.add_argument('path', type=str, nargs=2,
-                    default=['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results'],
+parser.add_argument('path', type=str, nargs=4,
+                    default=['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results','dataset/FaceData/CelebAMask-HQ/src_mask','dataset/FaceData/CelebAMask-HQ/target_mask'],
                     help=('Paths to the generated images or '
                           'to .npz statistic files'))
 
@@ -95,7 +99,68 @@ class ImagePathDataset(torch.utils.data.Dataset):
         return image
 
 
-def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
+class MaskedImagePathDataset(torch.utils.data.Dataset):
+    def __init__(self, files,maskfiles=None, transforms=None):
+        self.files = files
+        self.maskfiles = maskfiles  
+        self.transforms = transforms
+        self.trans=A.Compose([
+            A.Resize(height=112,width=112)])
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        # _, self.preprocess = clip.load("ViT-B/32", device=device)
+        # self.preprocess
+        # eval_transform = transforms.Compose([transforms.ToTensor(),
+        #                                  transforms.Resize(112),
+        #                                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    def __len__(self):
+        return len(self.files)
+    
+
+    def __getitem__(self, i):
+        path = self.files[i]
+        # image=Image.open(path).convert('RGB')
+        # ref_img_path = self.ref_imgs[index]
+        # print(path)
+        image=cv2.imread(str(path))
+        # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+        mask_path = self.maskfiles[i]
+        ref_mask_img = Image.open(mask_path).convert('L')
+        ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
+
+        preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
+        # preserve = [1,2,4,5,8,9 ]
+        ref_mask= np.isin(ref_mask_img, preserve)
+
+        # Create a converted_mask where preserved values are set to 255
+        ref_converted_mask = np.zeros_like(ref_mask_img)
+        ref_converted_mask[ref_mask] = 255
+        ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
+        # convert to PIL image
+        
+        
+        ref_mask_img_r = ref_converted_mask.resize(image.shape[1::-1], Image.NEAREST)
+        ref_mask_img_r = np.array(ref_mask_img_r)
+        # image[ref_mask_img_r==0]=0
+        
+        image=self.trans(image=image)
+        image=Image.fromarray(image["image"])
+        image=get_tensor()(image)
+        
+        
+        # ref_img=Image.fromarray(ref_img)
+        
+        # ref_img=get_tensor_clip()(ref_img)
+        image = image.unsqueeze(0)
+        
+        
+        
+        # image = get_tensor()(Image.open(path).convert('RGB').resize((112,112))).unsqueeze(0)
+        return image
+
+
+def compute_features(files,mask_files, model, batch_size=50, dims=2048, device='cpu',
                     num_workers=1):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
@@ -121,12 +186,15 @@ def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
                'Setting batch size to data size'))
         batch_size = len(files)
 
-    dataset = ImagePathDataset(files, transforms=TF.ToTensor())
+    dataset = MaskedImagePathDataset(files,maskfiles=mask_files, transforms=TF.ToTensor())
+    
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
                                              shuffle=False,
                                              drop_last=False,
                                              num_workers=num_workers)
+    
+
 
     pred_arr = np.empty((len(files), 512))
 
@@ -136,7 +204,7 @@ def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
     face_pool_2 = torch.nn.AdaptiveAvgPool2d((112, 112))
     for batch in tqdm(dataloader):
         batch = batch.to(device).squeeze(1)
-        # breakpoint()
+
         with torch.no_grad():
             # x = face_pool_1(batch)  if batch.shape[2]!=256 else  batch # (1) resize to 256 if needed
             # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
@@ -240,7 +308,7 @@ def calculate_activation_statistics(files, model, batch_size=50, dims=2048,
     return mu, sigma
 
 
-def compute_features_wrapp(path, model, batch_size, dims, device,
+def compute_features_wrapp(path,mask_path, model, batch_size, dims, device,
                                num_workers=1):
     if path.endswith('.npz'):
         with np.load(path) as f:
@@ -249,6 +317,10 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
         path = pathlib.Path(path)
         files = sorted([file for ext in IMAGE_EXTENSIONS
                        for file in path.glob('*.{}'.format(ext))])
+        
+        mask_path = pathlib.Path(mask_path)
+        mask_files = sorted([file for ext in IMAGE_EXTENSIONS
+                       for file in mask_path.glob('*.{}'.format(ext))])
         # Extract all numbers before the dot using regular expression
         # breakpoint()
         pattern = r'[_\/.-]'
@@ -263,8 +335,8 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
         min_num= min(numbers)
         # if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
         numbers = [num-min_num for num in numbers] # celeb
-        
-        pred_arr = compute_features(files, model, batch_size,
+        # breakpoint()
+        pred_arr = compute_features(files,mask_files, model, batch_size,
                                                dims, device, num_workers)
 
     return pred_arr,numbers
@@ -294,9 +366,9 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     # CosFace.to(device)
     
 
-    feat1,ori_lab = compute_features_wrapp(paths[0], CosFace, batch_size,
+    feat1,ori_lab = compute_features_wrapp(paths[0],paths[2], CosFace, batch_size,
                                         dims, device, num_workers)
-    feat2,swap_lab = compute_features_wrapp(paths[1], CosFace, batch_size,
+    feat2,swap_lab = compute_features_wrapp(paths[1],paths[3], CosFace, batch_size,
                                         dims, device, num_workers)
     # dot produc to get similarity
     # breakpoint()

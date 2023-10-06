@@ -419,7 +419,10 @@ class DDPM(pl.LightningModule):
         return loss, loss_dict
 
     def training_step(self, batch, batch_idx):
-        loss, loss_dict = self.shared_step(batch)
+        if not self.Reconstruct_initial:
+            loss, loss_dict = self.shared_step(batch)       # original
+        else:
+            loss, loss_dict = self.shared_step_face(batch) # changed by sanoojan : to add ID loss after reconstructing through DDIM
 
         self.log_dict(loss_dict, prog_bar=True,
                       logger=True, on_step=True, on_epoch=True)
@@ -539,6 +542,12 @@ class LatentDiffusion(DDPM):
             self.ID_weight=cond_stage_config.other_params.ID_weight
             self.Landmark_cond=cond_stage_config.other_params.Landmark_cond
             self.Landmarks_weight=cond_stage_config.other_params.Landmarks_weight
+            if hasattr(cond_stage_config.other_params, 'Reconstruct_initial'):
+                self.Reconstruct_initial=cond_stage_config.Additional_config.Reconstruct_initial
+                self.Reconstruct_DDIM_steps=cond_stage_config.Additional_config.Reconstruct_DDIM_steps
+            else:
+                self.Reconstruct_initial=False
+                self.Reconstruct_DDIM_steps=0
         else:
             self.clip_weight=1
             self.ID_weight=0
@@ -552,6 +561,8 @@ class LatentDiffusion(DDPM):
             self.detector = dlib.get_frontal_face_detector()
             self.predictor = dlib.shape_predictor("Other_dependencies/DLIB_landmark_det/shape_predictor_68_face_landmarks.dat")
             self.landmark_proj_out=nn.Linear(136, 768)
+        
+        
         try:
             self.num_downs = len(first_stage_config.params.ddconfig.ch_mult) - 1
         except:
@@ -1069,6 +1080,10 @@ class LatentDiffusion(DDPM):
         x, c ,landmarks= self.get_input(batch, self.first_stage_key,get_landmarks_out=True)
         loss = self(x, c,landmarks=landmarks)
         return loss
+    def shared_step_face(self, batch, **kwargs):
+        x, c ,landmarks= self.get_input(batch, self.first_stage_key,get_landmarks_out=True)
+        loss = self.forward_face(x, c,landmarks=landmarks)
+        return loss
 
     def forward(self, x, c,landmarks=None, *args, **kwargs):
         t = torch.randint(0, self.num_timesteps, (x.shape[0],), device=self.device).long()
@@ -1086,6 +1101,26 @@ class LatentDiffusion(DDPM):
             return self.p_losses(x, self.learnable_vector.repeat(x.shape[0],1,1), t, *args, **kwargs)
         else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
             return self.p_losses(x, c, t, *args, **kwargs)
+    
+    def forward_face(self, x, c,landmarks=None, *args, **kwargs):
+        t = torch.randint(0, self.num_timesteps, (x.shape[0],), device=self.device).long()
+        self.u_cond_prop=random.uniform(0, 1)
+        if self.model.conditioning_key is not None:
+            assert c is not None
+            if self.cond_stage_trainable:
+                c=self.conditioning_with_feat(c,landmarks=landmarks)
+                    
+            if self.shorten_cond_schedule:  # TODO: drop this option
+                tc = self.cond_ids[t].to(self.device)
+                c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
+
+        if self.u_cond_prop<self.u_cond_percent:
+            return self.p_losses_face(x, self.learnable_vector.repeat(x.shape[0],1,1), t, *args, **kwargs)
+        else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
+            return self.p_losses_face(x, c, t, *args, **kwargs)
+        
+        
+        
 
     def _rescale_annotations(self, bboxes, crop_coordinates):  # TODO: move to dataset
         def rescale_bbox(bbox):
@@ -1255,6 +1290,50 @@ class LatentDiffusion(DDPM):
         loss_dict.update({f'{prefix}/loss': loss})
 
         return loss, loss_dict
+    
+    def p_losses_face(self, x_start, cond, t, noise=None, ):
+        if self.first_stage_key == 'inpaint':
+            # x_start=x_start[:,:4,:,:]
+            noise = default(noise, lambda: torch.randn_like(x_start[:,:4,:,:]))
+            x_noisy = self.q_sample(x_start=x_start[:,:4,:,:], t=t, noise=noise)
+            x_noisy = torch.cat((x_noisy,x_start[:,4:,:,:]),dim=1)
+        else:
+            noise = default(noise, lambda: torch.randn_like(x_start))
+            x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
+        
+        model_output = self.apply_model(x_noisy, t, cond)
+
+        loss_dict = {}
+        prefix = 'train' if self.training else 'val'
+
+        if self.parameterization == "x0":
+            target = x_start
+        elif self.parameterization == "eps":
+            target = noise
+        else:
+            raise NotImplementedError()
+
+        loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
+        loss_dict.update({f'{prefix}/loss_simple': loss_simple.mean()})
+
+
+        logvar_t = self.logvar[t].to(self.device)
+        loss = loss_simple / torch.exp(logvar_t) + logvar_t
+        # loss = loss_simple / torch.exp(self.logvar) + self.logvar
+        if self.learn_logvar:
+            loss_dict.update({f'{prefix}/loss_gamma': loss.mean()})
+            loss_dict.update({'logvar': self.logvar.data.mean()})
+
+        loss = self.l_simple_weight * loss.mean()
+
+        loss_vlb = self.get_loss(model_output, target, mean=False).mean(dim=(1, 2, 3)) #??
+        loss_vlb = (self.lvlb_weights[t] * loss_vlb).mean()
+        loss_dict.update({f'{prefix}/loss_vlb': loss_vlb})
+        loss += (self.original_elbo_weight * loss_vlb)
+        loss_dict.update({f'{prefix}/loss': loss})
+
+        return loss, loss_dict
+
 
     def p_mean_variance(self, x, c, t, clip_denoised: bool, return_codebook_ids=False, quantize_denoised=False,
                         return_x0=False, score_corrector=None, corrector_kwargs=None):
