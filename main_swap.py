@@ -23,7 +23,7 @@ import socket
 from pytorch_lightning.plugins.environments import ClusterEnvironment,SLURMEnvironment
 
 #set cuda visible devices =3
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 def get_parser(**parser_kwargs):
@@ -63,7 +63,7 @@ def get_parser(**parser_kwargs):
         metavar="base_config.yaml",
         help="paths to base configs. Loaded from left-to-right. "
              "Parameters can be overwritten or added with command-line options of the form `--key value`.",
-        default=["configs/v4_reconstruct_img_train.yaml"],
+        default=["configs/debug.yaml"],
     )
     parser.add_argument(
         "-t",

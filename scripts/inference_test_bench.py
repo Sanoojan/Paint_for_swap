@@ -31,7 +31,7 @@ safety_feature_extractor = AutoFeatureExtractor.from_pretrained(safety_model_id)
 safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
 #set cuda device 3
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 
@@ -125,7 +125,7 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results/test_bench"
+        default="results/debug"
     )
     parser.add_argument(
         "--skip_grid",
@@ -220,7 +220,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/v2.yaml",
+        default="configs/v4_reconstruct_img_train.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(

@@ -239,10 +239,10 @@ class CelebAdataset(data.Dataset):
             A.Rotate(limit=20),
             A.Blur(p=0.3),
             A.ElasticTransform(p=0.3), 
-            A.GaussNoise(p=0.3),# newly added from this line
-            A.HueSaturationValue(p=0.3),
-            A.ISONoise(p=0.3),
-            A.Solarize(p=0.3),
+            # A.GaussNoise(p=0.3),# newly added from this line
+            # A.HueSaturationValue(p=0.3),
+            # A.ISONoise(p=0.3),
+            # A.Solarize(p=0.3),
             ])
         # bad_list=[
         #     '1af17f3d912e9aac.txt',
@@ -365,16 +365,23 @@ class CelebAdataset(data.Dataset):
         img_p_np = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
         ref_image_tensor=img_p_np
         # resize mask_img
-        mask_img_r = mask_img.resize(img_p_np.shape[1::-1], Image.NEAREST)
-        mask_img_r = np.array(mask_img_r)
+        # mask_img_r = mask_img.resize(img_p_np.shape[1::-1], Image.NEAREST)
+        
         
         # select only mask_img region from reference image
-        ref_image_tensor[mask_img_r==0]=0   # comment this if full img should be used
+        # ref_image_tensor[mask_img_r==0]=0   # comment this if full img should be used
     
         
         ref_image_tensor=self.random_trans(image=ref_image_tensor)
         ref_image_tensor=Image.fromarray(ref_image_tensor["image"])
         ref_image_tensor=get_tensor_clip()(ref_image_tensor)
+        #mask ref_image_tensor where mask_img_r==0
+        # get mask_img_r in 3 channels
+        mask_img_r = mask_img.resize(ref_image_tensor.shape[1::], Image.NEAREST)
+        mask_img_r = np.array(mask_img_r)
+        
+        mask_img_r = np.repeat(mask_img_r[np.newaxis,:, :], 3, axis=0)
+        ref_image_tensor=ref_image_tensor*mask_img_r
 
 
 

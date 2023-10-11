@@ -79,7 +79,7 @@ model:
         Additional_config:
           Reconstruct_initial: True
           Reconstruct_DDIM_steps: 4
-          ID_loss_weight: 0.3
+          ID_loss_weight: 0.5
           LPIPS_loss_weight: 0.1
           Landmark_loss_weight: 0
         
@@ -153,4 +153,4 @@ lightning:
     max_epochs: 20
     num_nodes: 1
     accelerator: 'gpu'
-    gpus: "0,1"
+    gpus: "0"

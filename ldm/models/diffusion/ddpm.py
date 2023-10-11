@@ -24,12 +24,18 @@ from ldm.models.autoencoder import VQModelInterface, IdentityFirstStage, Autoenc
 from ldm.modules.diffusionmodules.util import make_beta_schedule, extract_into_tensor, noise_like
 from ldm.models.diffusion.ddim import DDIMSampler
 from torchvision.transforms import Resize
+import torchvision.transforms.functional as TF  
+import torch.nn.functional as F
 import math
 import time
 import random
 from torch.autograd import Variable
 from src.Face_models.encoders.model_irse import Backbone
 import dlib
+from eval_tool.lpips.lpips import LPIPS
+
+
+
 
 __conditioning_keys__ = {'concat': 'c_concat',
                          'crossattn': 'c_crossattn',
@@ -42,6 +48,13 @@ def disabled_train(self, mode=True):
     """Overwrite model.train with this function to make sure train/eval mode
     does not change anymore."""
     return self
+
+def un_norm_clip(x):
+    x[0,:,:] = x[0,:,:] * 0.26862954 + 0.48145466
+    x[1,:,:] = x[1,:,:] * 0.26130258 + 0.4578275
+    x[2,:,:] = x[2,:,:] * 0.27577711 + 0.40821073
+    return x
+
 
 class IDLoss(nn.Module):
     def __init__(self,opts):
@@ -542,12 +555,21 @@ class LatentDiffusion(DDPM):
             self.ID_weight=cond_stage_config.other_params.ID_weight
             self.Landmark_cond=cond_stage_config.other_params.Landmark_cond
             self.Landmarks_weight=cond_stage_config.other_params.Landmarks_weight
-            if hasattr(cond_stage_config.other_params, 'Reconstruct_initial'):
-                self.Reconstruct_initial=cond_stage_config.Additional_config.Reconstruct_initial
-                self.Reconstruct_DDIM_steps=cond_stage_config.Additional_config.Reconstruct_DDIM_steps
+            if hasattr(cond_stage_config.other_params, 'Additional_config'):
+                self.Reconstruct_initial=cond_stage_config.other_params.Additional_config.Reconstruct_initial
+                self.Reconstruct_DDIM_steps=cond_stage_config.other_params.Additional_config.Reconstruct_DDIM_steps
+                self.sampler=DDIMSampler(self)
+                self.ID_loss_weight=cond_stage_config.other_params.Additional_config.ID_loss_weight
+                self.LPIPS_loss_weight=cond_stage_config.other_params.Additional_config.LPIPS_loss_weight
+                self.Landmark_loss_weight=cond_stage_config.other_params.Additional_config.Landmark_loss_weight
+                if self.LPIPS_loss_weight>0:
+                    self.lpips_loss = LPIPS(net_type='alex').to(self.device).eval()
+                    
             else:
                 self.Reconstruct_initial=False
                 self.Reconstruct_DDIM_steps=0
+            self.update_weight=True  
+                
         else:
             self.clip_weight=1
             self.ID_weight=0
@@ -561,7 +583,12 @@ class LatentDiffusion(DDPM):
             self.detector = dlib.get_frontal_face_detector()
             self.predictor = dlib.shape_predictor("Other_dependencies/DLIB_landmark_det/shape_predictor_68_face_landmarks.dat")
             self.landmark_proj_out=nn.Linear(136, 768)
-        
+            
+        # total_devices = self.hparams.n_gpus * self.hparams.n_nodes
+        # self.train_batches = len(self.train_dataloader()) // total_devices
+        # self.train_reduce_steps = (self.hparams.epochs * self.train_batches) // (self.hparams.accumulate_grad_batches * 2) # for half of the time full trining with ID
+        # self.change_weights=2/self.train_steps
+        self.total_steps_in_epoch=0 # will be calculated inside training_step. Not known for now
         
         try:
             self.num_downs = len(first_stage_config.params.ddconfig.ch_mult) - 1
@@ -693,9 +720,34 @@ class LatentDiffusion(DDPM):
             c = getattr(self.cond_stage_model, self.cond_stage_forward)(c)
         return c
     
-    def conditioning_with_feat(self,x,landmarks=None):
+    def conditioning_with_feat(self,x,landmarks=None,is_train=False):
         c=0
         c2=0
+        #find the model is in training or not
+        is_train=self.training
+        # self.train_reduce_steps=10000
+        warmup_epoch=1
+        # self.total_steps_in_epoch=7500
+        reduce_weight_epochs=10
+        if is_train and self.update_weight:
+            if self.current_epoch<warmup_epoch:  #warmup
+                self.clip_weight=1.0
+                self.ID_weight=0.0
+                if self.current_epoch<1:
+                    self.total_steps_in_epoch=self.total_steps_in_epoch+1
+                
+                    self.train_reduce_steps=self.total_steps_in_epoch*(reduce_weight_epochs-warmup_epoch)
+            else:
+        
+                self.clip_weight=(self.train_reduce_steps+self.total_steps_in_epoch-self.global_step)/(self.train_reduce_steps)
+                self.ID_weight=1.0-self.clip_weight
+                if self.clip_weight<0:
+                    self.clip_weight=0.0
+                    self.ID_weight=1.0
+                    self.update_weight=False
+                # print("weights:",self.clip_weight,self.ID_weight)
+                    
+        
         if self.ID_weight>0:
             c2=self.face_ID_model.extract_feats(x)[0]
             c2 = self.ID_proj_out(c2) #-->c:[4,768]
@@ -715,6 +767,7 @@ class LatentDiffusion(DDPM):
     def get_landmarks(self,x):
         def un_norm(x):
             return (x+1.0)/2.0
+        
         if self.Landmark_cond and x is not None:
             # pass
             # # Detect faces in an image
@@ -833,7 +886,7 @@ class LatentDiffusion(DDPM):
 
     @torch.no_grad()
     def get_input(self, batch, k, return_first_stage_outputs=False, force_c_encode=False,
-                  cond_key=None, return_original_cond=False, bs=None,get_mask=False,get_reference=False,get_landmarks_out=False):
+                  cond_key=None, return_original_cond=False, bs=None,get_mask=False,get_reference=False,get_landmarks_out=False,get_gt=False):
         
         x,inpaint,mask,reference = super().get_input(batch, k)
         #x : Original Image
@@ -911,6 +964,8 @@ class LatentDiffusion(DDPM):
             out.append(reference)
         if get_landmarks_out:
             out.append(landmarks)
+        if get_gt:
+            out.append(x)
         return out
         
     @torch.no_grad()
@@ -1081,8 +1136,8 @@ class LatentDiffusion(DDPM):
         loss = self(x, c,landmarks=landmarks)
         return loss
     def shared_step_face(self, batch, **kwargs):
-        x, c ,landmarks= self.get_input(batch, self.first_stage_key,get_landmarks_out=True)
-        loss = self.forward_face(x, c,landmarks=landmarks)
+        x, c ,referecnce,landmarks,GT_tar= self.get_input(batch, self.first_stage_key,get_landmarks_out=True,get_reference=True,get_gt=True)
+        loss = self.forward_face(x, c,landmarks=landmarks,reference=referecnce,GT_tar=GT_tar)
         return loss
 
     def forward(self, x, c,landmarks=None, *args, **kwargs):
@@ -1102,7 +1157,7 @@ class LatentDiffusion(DDPM):
         else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
             return self.p_losses(x, c, t, *args, **kwargs)
     
-    def forward_face(self, x, c,landmarks=None, *args, **kwargs):
+    def forward_face(self, x, c,landmarks=None,reference=None,GT_tar=None, *args, **kwargs):
         t = torch.randint(0, self.num_timesteps, (x.shape[0],), device=self.device).long()
         self.u_cond_prop=random.uniform(0, 1)
         if self.model.conditioning_key is not None:
@@ -1115,9 +1170,9 @@ class LatentDiffusion(DDPM):
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
 
         if self.u_cond_prop<self.u_cond_percent:
-            return self.p_losses_face(x, self.learnable_vector.repeat(x.shape[0],1,1), t, *args, **kwargs)
+            return self.p_losses_face(x, self.learnable_vector.repeat(x.shape[0],1,1), t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)
         else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
-            return self.p_losses_face(x, c, t, *args, **kwargs)
+            return self.p_losses_face(x, c, t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)
         
         
         
@@ -1291,7 +1346,7 @@ class LatentDiffusion(DDPM):
 
         return loss, loss_dict
     
-    def p_losses_face(self, x_start, cond, t, noise=None, ):
+    def p_losses_face(self, x_start, cond, t, reference=None,noise=None,GT_tar=None,landmarks=None):
         if self.first_stage_key == 'inpaint':
             # x_start=x_start[:,:4,:,:]
             noise = default(noise, lambda: torch.randn_like(x_start[:,:4,:,:]))
@@ -1303,8 +1358,86 @@ class LatentDiffusion(DDPM):
         
         model_output = self.apply_model(x_noisy, t, cond)
 
+    
+        ########################
+        ddim_steps=self.Reconstruct_DDIM_steps
+        n_samples=x_noisy.shape[0]
+        shape=(4,64,64)
+        scale=5
+        ddim_eta=0.0
+        start_code=x_noisy
+        test_model_kwargs=None
+        t=t
+        
+        # Here flipping the cond so that different sorce image will go to the model
+        cond=torch.flip(cond,[0]) # 4,1,768
+        #flip references
+        reference=torch.flip(reference,[0]) # 4,3,224,224
+        
+        samples_ddim, _ = self.sampler.sample_train(S=ddim_steps,
+                                                conditioning=cond,
+                                                batch_size=n_samples,
+                                                shape=shape,
+                                                verbose=False,
+                                                unconditional_guidance_scale=scale,
+                                                unconditional_conditioning=None,
+                                                eta=ddim_eta,
+                                                x_T=start_code,
+                                                t=t,
+                                                test_model_kwargs=test_model_kwargs)
+
+        x_samples_ddim = self.decode_first_stage(samples_ddim)
+        
+        # x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+        # x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
+        
+        
+        ###########################################
+
+
         loss_dict = {}
         prefix = 'train' if self.training else 'val'
+        
+        ID_loss=0
+        loss_lpips=0
+        loss_landmark=0
+        if reference is not None:
+            reference=un_norm_clip(reference)
+            reference = TF.normalize(reference, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            # reference=TF.resize(reference,(256,256))
+            
+            # x_samples_ddim=TF.resize(x_samples_ddim,(256,256))
+            masks=TF.resize(x_start[:,8,:,:],(x_samples_ddim.shape[2],x_samples_ddim.shape[3]))
+            #mask x_samples_ddim
+            x_samples_ddim=x_samples_ddim*masks.unsqueeze(1)
+            
+            ID_loss,sim_imp,_=self.face_ID_model(x_samples_ddim,reference)
+            loss_dict.update({f'{prefix}/ID_loss': ID_loss})
+            loss_dict.update({f'{prefix}/sim_imp': sim_imp})
+            
+            
+            if self.LPIPS_loss_weight>0:
+                
+                
+                for i in range(3):
+                    loss_lpips_1 = self.lpips_loss(
+                        F.adaptive_avg_pool2d(x_samples_ddim,(512//2**i,512//2**i)), 
+                        F.adaptive_avg_pool2d(GT_tar,(512//2**i,512//2**i))
+                    )
+                    
+                    loss_lpips += loss_lpips_1
+                
+                loss_dict.update({f'{prefix}/loss_lpips': loss_lpips})
+                
+            if self.Landmark_loss_weight>0:
+                
+                
+                loss_landmark = self.find_landmark_loss(x_samples_ddim,landmarks)
+                loss_dict.update({f'{prefix}/loss_landmark': loss_landmark})
+        
+        
+     
+
 
         if self.parameterization == "x0":
             target = x_start
@@ -1332,6 +1465,7 @@ class LatentDiffusion(DDPM):
         loss += (self.original_elbo_weight * loss_vlb)
         loss_dict.update({f'{prefix}/loss': loss})
 
+        loss+=self.ID_loss_weight*ID_loss+self.LPIPS_loss_weight*loss_lpips+self.Landmark_loss_weight*loss_landmark
         return loss, loss_dict
 
 
@@ -1536,7 +1670,19 @@ class LatentDiffusion(DDPM):
                                                  return_intermediates=True,**kwargs)
 
         return samples, intermediates
+    
+    def sample_initial(self,cond,batch_size,ddim, ddim_steps,**kwargs):
+        if ddim:
+            ddim_sampler = DDIMSampler(self)
+            shape = (self.channels, self.image_size, self.image_size)
+            samples, intermediates =ddim_sampler.sample(ddim_steps,batch_size,
+                                                        shape,cond,verbose=False,**kwargs)
 
+        else:
+            samples, intermediates = self.sample(cond=cond, batch_size=batch_size,
+                                                 return_intermediates=True,**kwargs)
+
+        return samples, intermediates
 
     @torch.no_grad()
     def log_images(self, batch, N=4, n_row=4, sample=True, ddim_steps=200, ddim_eta=1., return_keys=None,
