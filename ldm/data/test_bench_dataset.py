@@ -269,14 +269,16 @@ class CelebAdataset(data.Dataset):
         
         
         # ref_mask_img=Image.fromarray(ref_img).convert('L')
-        ref_mask_img_r = ref_converted_mask.resize(img_p_np.shape[1::-1], Image.NEAREST)
-        ref_mask_img_r = np.array(ref_mask_img_r)
-        ref_img[ref_mask_img_r==0]=0
+        
         
         ref_img=self.trans(image=ref_img)
         ref_img=Image.fromarray(ref_img["image"])
         ref_img=get_tensor_clip()(ref_img)
         
+        # ref_mask_img_r = ref_converted_mask.resize(ref_img.shape[1::], Image.NEAREST)
+        # ref_mask_img_r = np.array(ref_mask_img_r)
+        # ref_img=ref_img*ref_mask_img_r
+        # ref_img[ref_mask_img_r==0]=0
         
         # ref_img=Image.fromarray(ref_img)
         
@@ -295,6 +297,10 @@ class CelebAdataset(data.Dataset):
         mask_tensor=1-get_tensor(normalize=False, toTensor=True)(mask_img)
 
         inpaint_tensor=image_tensor*mask_tensor
+        
+        mask_ref=T.Resize((224,224))(mask_tensor)
+        mask_ref=1-mask_ref
+        ref_img=ref_img*mask_ref
     
         return image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_tensor,"ref_imgs":ref_image_tensor},str(index).zfill(12)
   

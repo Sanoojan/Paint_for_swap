@@ -34,7 +34,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
-
+from einops import rearrange
 from torchvision.utils import save_image
 
 def bbox_process(bbox):
@@ -102,6 +102,11 @@ MASK_CONVERT_TF_DETAILED = transforms.Lambda(
 
 NORMALIZE = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
+def un_norm_clip(x):
+    x[0,:,:] = x[0,:,:] * 0.26862954 + 0.48145466
+    x[1,:,:] = x[1,:,:] * 0.26130258 + 0.4578275
+    x[2,:,:] = x[2,:,:] * 0.27577711 + 0.40821073
+    return x
 
 def get_transforms(normalize=True, toTensor=True):
     transform_list = []
@@ -244,6 +249,14 @@ class CelebAdataset(data.Dataset):
             # A.ISONoise(p=0.3),
             # A.Solarize(p=0.3),
             ])
+        # self.torch_random_trans=transforms.Compose([
+            
+        #     transforms.RandomHorizontalFlip(p=0.5),
+        #     transforms.RandomRotation(20),
+        #     transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
+        #     transforms.GaussianBlur(5),
+        #     transforms.,
+        #     ])
         # bad_list=[
         #     '1af17f3d912e9aac.txt',
         #     '1d5ef05c8da80e31.txt',
@@ -372,16 +385,16 @@ class CelebAdataset(data.Dataset):
         # ref_image_tensor[mask_img_r==0]=0   # comment this if full img should be used
     
         
-        ref_image_tensor=self.random_trans(image=ref_image_tensor)
-        ref_image_tensor=Image.fromarray(ref_image_tensor["image"])
+        # ref_image_tensor=self.random_trans(image=ref_image_tensor)
+        ref_image_tensor=Image.fromarray(ref_image_tensor)
         ref_image_tensor=get_tensor_clip()(ref_image_tensor)
         #mask ref_image_tensor where mask_img_r==0
         # get mask_img_r in 3 channels
-        mask_img_r = mask_img.resize(ref_image_tensor.shape[1::], Image.NEAREST)
-        mask_img_r = np.array(mask_img_r)
+        # mask_img_r = mask_img.resize(ref_image_tensor.shape[1::], Image.NEAREST)
+        # mask_img_r = np.array(mask_img_r)
         
-        mask_img_r = np.repeat(mask_img_r[np.newaxis,:, :], 3, axis=0)
-        ref_image_tensor=ref_image_tensor*mask_img_r
+        # mask_img_r = np.repeat(mask_img_r[np.newaxis,:, :], 3, axis=0)
+        # ref_image_tensor=ref_image_tensor*mask_img_r
 
 
 
@@ -393,7 +406,19 @@ class CelebAdataset(data.Dataset):
         mask_tensor_cropped=mask_tensor
         image_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(image_tensor_cropped)
         mask_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(mask_tensor_cropped)
+        
+        
         inpaint_tensor_resize=image_tensor_resize*mask_tensor_resize
+        
+        mask_ref=1-T.Resize([1024,1024])(mask_tensor)
+        ref_image_tensor=ref_image_tensor*mask_ref
+        
+        # ref_image_tensor=Image.fromarray(ref_image_tensor)
+        ref_image_tensor=255.* rearrange(un_norm_clip(ref_image_tensor), 'c h w -> h w c').cpu().numpy()
+        
+        ref_image_tensor=self.random_trans(image=ref_image_tensor)
+        ref_image_tensor=Image.fromarray(ref_image_tensor['image'].astype(np.uint8)) 
+        ref_image_tensor=get_tensor_clip()(ref_image_tensor)
    
         return {"GT":image_tensor_resize,"inpaint_image":inpaint_tensor_resize,"inpaint_mask":mask_tensor_resize,"ref_imgs":ref_image_tensor}
 
