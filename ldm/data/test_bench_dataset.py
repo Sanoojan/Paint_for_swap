@@ -125,7 +125,7 @@ class CelebAdataset(data.Dataset):
         self.load_vis_img=load_vis_img
         self.state=state
         self.args=args
-     
+        self.load_prior=True
         self.kernel = np.ones((1, 1), np.uint8)
         self.random_trans=A.Compose([
             A.Resize(height=224,width=224),
@@ -162,6 +162,9 @@ class CelebAdataset(data.Dataset):
             self.ref_imgs= self.ref_imgs[:int(len(self.imgs)*self.fraction)]
             self.ref_labels= self.ref_labels[:int(len(self.labels)*self.fraction)]
             self.ref_labels_vis= self.ref_labels_vis[:int(len(self.labels_vis)*self.fraction)]  if self.load_vis_img else None
+            # intermediate_results_261/results/000000028000.jpg
+            if self.load_prior:
+                self.prior_images=sorted([osp.join("intermediate_results_261/results", "0000000%d.jpg"%idx) for idx in range(28000, 29000)])
             
         self.imgs= self.imgs[:int(len(self.imgs)*self.fraction)]
         self.labels= self.labels[:int(len(self.labels)*self.fraction)]
@@ -219,13 +222,109 @@ class CelebAdataset(data.Dataset):
   
 
     
-    def __getitem__(self, index):
+    # def __getitem__(self, index):
+    #     # uses the gray mask in reference
+        
+    #     img_path = self.imgs[index]
+    #     img_p = Image.open(img_path).convert('RGB').resize((512,512))
+    #     # if self.img_transform is not None:
+    #     #     img = self.img_transform(img)
 
+    #     mask_path = self.labels[index]
+    #     mask_img = Image.open(mask_path).convert('L')
+    #     mask_img = np.array(mask_img)  # Convert the label to a NumPy array if it's not already
+
+    #     # Create a mask to preserve values in the 'preserve' list
+    #     # preserve = [1,2,4,5,8,9,17 ]
+    #     preserve = [1,2,4,5,8,9, 6,7,10,11,12]
+    #     mask = np.isin(mask_img, preserve)
+
+    #     # Create a converted_mask where preserved values are set to 255
+    #     converted_mask = np.zeros_like(mask_img)
+    #     converted_mask[mask] = 255
+    #     # convert to PIL image
+    #     mask_img=Image.fromarray(converted_mask).convert('L')
+
+   
+
+    #     ### Get reference
+    #     ref_img_path = self.ref_imgs[index]
+    #     img_p_np=cv2.imread(ref_img_path)
+    #     # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
+    #     ref_img = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
+    #     # ref_img= cv2.resize(ref_img, (224, 224))
+        
+    #     ref_mask_path = self.ref_labels[index]
+    #     ref_mask_img = Image.open(ref_mask_path).convert('L')
+    #     ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
+
+    #     # Create a mask to preserve values in the 'preserve' list
+    #     # preserve = [1,2,4,5,8,9,17 ]
+    #     preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
+    #     # preserve = [1,2,4,5,8,9 ]
+    #     ref_mask= np.isin(ref_mask_img, preserve)
+
+    #     # Create a converted_mask where preserved values are set to 255
+    #     ref_converted_mask = np.zeros_like(ref_mask_img)
+    #     ref_converted_mask[ref_mask] = 255
+    #     ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
+    #     # convert to PIL image
+        
+        
+    #     # ref_mask_img=Image.fromarray(ref_img).convert('L')
+        
+        
+    #     ref_img=self.trans(image=ref_img)
+    #     ref_img=Image.fromarray(ref_img["image"])
+    #     ref_img=get_tensor_clip()(ref_img)
+        
+    #     # ref_mask_img_r = ref_converted_mask.resize(ref_img.shape[1::], Image.NEAREST)
+    #     # ref_mask_img_r = np.array(ref_mask_img_r)
+    #     # ref_img=ref_img*ref_mask_img_r
+    #     # ref_img[ref_mask_img_r==0]=0
+        
+    #     # ref_img=Image.fromarray(ref_img)
+        
+    #     # ref_img=get_tensor_clip()(ref_img)
+        
+        
+        
+
+
+    #     ### Crop input image
+    #     image_tensor = get_tensor()(img_p)
+    #     W,H = img_p.size
+
+   
+
+    #     mask_tensor=1-get_tensor(normalize=False, toTensor=True)(mask_img)
+    #     reference_mask_tensor=get_tensor(normalize=False, toTensor=True)(ref_converted_mask)
+    #     inpaint_tensor=image_tensor*mask_tensor
+        
+    #     mask_ref=T.Resize((224,224))(reference_mask_tensor)
+   
+    #     # breakpoint()
+    #     ref_img=ref_img*mask_ref
+    #     ref_image_tensor = ref_img.unsqueeze(0)
+        
+    #     if self.load_prior:
+    #         prior_img_path = self.prior_images[index]
+    #         prior_img = Image.open(prior_img_path).convert('RGB').resize((512,512))
+    #         prior_image_tensor=get_tensor()(prior_img)
+    #         # prior_image_tensor = prior_img
+    #     else:
+    #         prior_image_tensor = None
+    
+    #     return image_tensor,prior_image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_tensor,"ref_imgs":ref_image_tensor},str(index).zfill(12)
+        
+        
+    
+    def __getitem__(self, index):
+        # uses the black mask in reference
         
         img_path = self.imgs[index]
         img_p = Image.open(img_path).convert('RGB').resize((512,512))
-        # if self.img_transform is not None:
-        #     img = self.img_transform(img)
+ 
 
         mask_path = self.labels[index]
         mask_img = Image.open(mask_path).convert('L')
@@ -268,21 +367,15 @@ class CelebAdataset(data.Dataset):
         # convert to PIL image
         
         
-        # ref_mask_img=Image.fromarray(ref_img).convert('L')
-        
+        ref_mask_img=Image.fromarray(ref_img).convert('L')
+        ref_mask_img_r = ref_converted_mask.resize(img_p_np.shape[1::-1], Image.NEAREST)
+        ref_mask_img_r = np.array(ref_mask_img_r)
+        ref_img[ref_mask_img_r==0]=0
         
         ref_img=self.trans(image=ref_img)
         ref_img=Image.fromarray(ref_img["image"])
         ref_img=get_tensor_clip()(ref_img)
         
-        # ref_mask_img_r = ref_converted_mask.resize(ref_img.shape[1::], Image.NEAREST)
-        # ref_mask_img_r = np.array(ref_mask_img_r)
-        # ref_img=ref_img*ref_mask_img_r
-        # ref_img[ref_mask_img_r==0]=0
-        
-        # ref_img=Image.fromarray(ref_img)
-        
-        # ref_img=get_tensor_clip()(ref_img)
         ref_image_tensor = ref_img.unsqueeze(0)
         
         
@@ -298,11 +391,15 @@ class CelebAdataset(data.Dataset):
 
         inpaint_tensor=image_tensor*mask_tensor
         
-        mask_ref=T.Resize((224,224))(mask_tensor)
-        mask_ref=1-mask_ref
-        ref_img=ref_img*mask_ref
+        if self.load_prior:
+            prior_img_path = self.prior_images[index]
+            prior_img = Image.open(prior_img_path).convert('RGB').resize((512,512))
+            prior_image_tensor=get_tensor()(prior_img)
+            # prior_image_tensor = prior_img
+        else:
+            prior_image_tensor = None
     
-        return image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_tensor,"ref_imgs":ref_image_tensor},str(index).zfill(12)
+        return image_tensor,prior_image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_tensor,"ref_imgs":ref_image_tensor},str(index).zfill(12)
   
 
     def __len__(self):

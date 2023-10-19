@@ -119,7 +119,21 @@ class IDLoss(nn.Module):
 def uniform_on_device(r1, r2, shape, device):
     return (r1 - r2) * torch.rand(*shape, device=device) + r2
 
+class LandmarkDetectionModel(nn.Module):
+    def __init__(self):
+        super(LandmarkDetectionModel, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(640, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.landmark_predictor = nn.Linear(128 * 32 * 32, 68 * 2)  # Adjust output size as needed
 
+    def forward(self, x):
+        x = self.features(x)
+        x = torch.flatten(x, 1)
+        landmarks = self.landmark_predictor(x)
+        return landmarks
 
 
 class DDPM(pl.LightningModule):
@@ -568,20 +582,26 @@ class LatentDiffusion(DDPM):
             else:
                 self.Reconstruct_initial=False
                 self.Reconstruct_DDIM_steps=0
-            self.update_weight=True  
+            self.update_weight=False  
                 
         else:
             self.clip_weight=1
             self.ID_weight=0
             self.Landmark_cond=False
             self.Landmarks_weight=0
+            self.Landmark_loss_weight=0
         if self.ID_weight>0:
             self.ID_proj_out=nn.Linear(200704, 768)
             self.instantiate_IDLoss(cond_stage_config)
             
-        if self.Landmark_cond:
+        if self.Landmark_cond or self.Landmark_loss_weight>0:
             self.detector = dlib.get_frontal_face_detector()
             self.predictor = dlib.shape_predictor("Other_dependencies/DLIB_landmark_det/shape_predictor_68_face_landmarks.dat")
+            if self.Landmark_loss_weight>0:
+                # from 640 channels 64 by 64 to 1 channel 64 by 64
+                self.landmark_predictor=LandmarkDetectionModel()
+                    
+                        
             self.landmark_proj_out=nn.Linear(136, 768)
             
         # total_devices = self.hparams.n_gpus * self.hparams.n_nodes
@@ -755,7 +775,7 @@ class LatentDiffusion(DDPM):
         if self.clip_weight>0:
             c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
             c = self.proj_out(c) #-->c:[4,1,768]
-        if landmarks is None:
+        if self.Landmark_cond==False:
             return (c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)
         landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
         c=(c*self.clip_weight+c2*self.ID_weight+landmarks *self.Landmarks_weight)/(self.clip_weight+self.ID_weight+self.Landmarks_weight)
@@ -768,7 +788,7 @@ class LatentDiffusion(DDPM):
         def un_norm(x):
             return (x+1.0)/2.0
         
-        if self.Landmark_cond and x is not None:
+        if (self.Landmark_cond or self.Landmark_loss_weight>0) and x is not None:
             # pass
             # # Detect faces in an image
             #convert to 8bit image
@@ -790,6 +810,8 @@ class LatentDiffusion(DDPM):
                 Landmarks_all.append(lm)
         Landmarks_all=np.concatenate(Landmarks_all,axis=0)
         Landmarks_all=torch.tensor(Landmarks_all).float().to(self.device)
+        if self.Landmark_loss_weight>0 and self.Landmark_cond == False:
+            return Landmarks_all
         Landmarks_all=self.landmark_proj_out(Landmarks_all)
         # normalize Landmarks_all
         
@@ -900,7 +922,7 @@ class LatentDiffusion(DDPM):
             reference = reference[:bs]
         x = x.to(self.device)
         
-        if self.Landmark_cond: 
+        if self.Landmark_cond or self.Landmark_loss_weight>0: 
             landmarks=self.get_landmarks(x)
         else:
             landmarks=None
@@ -1187,7 +1209,7 @@ class LatentDiffusion(DDPM):
 
         return [rescale_bbox(b) for b in bboxes]
 
-    def apply_model(self, x_noisy, t, cond, return_ids=False):
+    def apply_model(self, x_noisy, t, cond, return_ids=False,return_features=False):
 
         if isinstance(cond, dict):
             # hybrid case, cond is exptected to be a dict
@@ -1279,8 +1301,9 @@ class LatentDiffusion(DDPM):
             x_recon = fold(o) / normalization
 
         else:
-            x_recon = self.model(x_noisy, t, **cond)
-
+            x_recon = self.model(x_noisy, t, **cond, return_features=return_features)
+        if return_features:
+            return x_recon
         if isinstance(x_recon, tuple) and not return_ids:
             return x_recon[0]
         else:
@@ -1356,9 +1379,10 @@ class LatentDiffusion(DDPM):
             noise = default(noise, lambda: torch.randn_like(x_start))
             x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
         
-        model_output = self.apply_model(x_noisy, t, cond)
-
-    
+        model_output,features = self.apply_model(x_noisy, t, cond,return_features=True)
+        feat_cat=torch.cat(features[9:11],dim=1)
+        landmark_pred=self.landmark_predictor(feat_cat)
+        
         ########################
         ddim_steps=self.Reconstruct_DDIM_steps
         n_samples=x_noisy.shape[0]
@@ -1431,8 +1455,8 @@ class LatentDiffusion(DDPM):
                 
             if self.Landmark_loss_weight>0:
                 
-                
-                loss_landmark = self.find_landmark_loss(x_samples_ddim,landmarks)
+                # use functional mse loss
+                loss_landmark = F.mse_loss(landmark_pred, landmarks)
                 loss_dict.update({f'{prefix}/loss_landmark': loss_landmark})
         
         
@@ -1849,15 +1873,15 @@ class DiffusionWrapper(pl.LightningModule):
         self.conditioning_key = conditioning_key
         assert self.conditioning_key in [None, 'concat', 'crossattn', 'hybrid', 'adm']
 
-    def forward(self, x, t, c_concat: list = None, c_crossattn: list = None):
+    def forward(self, x, t, c_concat: list = None, c_crossattn: list = None,return_features=False):
         if self.conditioning_key is None:
             out = self.diffusion_model(x, t)
         elif self.conditioning_key == 'concat':
             xc = torch.cat([x] + c_concat, dim=1)
             out = self.diffusion_model(xc, t)
         elif self.conditioning_key == 'crossattn':
-            cc = torch.cat(c_crossattn, 1)  #-->cc.shape = (bs, 1, 768)
-            out = self.diffusion_model(x, t, context=cc)
+            cc = torch.cat(c_crossattn, 1)  #-->cc.shape = (bs, 1, 768) ## adding return_features  here only for testing
+            out = self.diffusion_model(x, t, context=cc,return_features=return_features)
         elif self.conditioning_key == 'hybrid':
             xc = torch.cat([x] + c_concat, dim=1)
             cc = torch.cat(c_crossattn, 1)

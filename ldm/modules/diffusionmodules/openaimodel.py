@@ -849,7 +849,7 @@ class UNetModel(nn.Module):
         self.middle_block.apply(convert_module_to_f32)
         self.output_blocks.apply(convert_module_to_f32)
 
-    def forward(self, x, timesteps=None, context=None, y=None,**kwargs):
+    def forward(self, x, timesteps=None, context=None, y=None,return_features=False,**kwargs):
         """
         Apply the model to an input batch.
         :param x: an [N x C x ...] Tensor of inputs.
@@ -864,7 +864,7 @@ class UNetModel(nn.Module):
         hs = []
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
         emb = self.time_embed(t_emb)
-
+        features=[]
         if self.num_classes is not None:
             assert y.shape == (x.shape[0],)
             emb = emb + self.label_emb(y)
@@ -882,9 +882,12 @@ class UNetModel(nn.Module):
         for module in self.output_blocks:
             h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb, context)
+            features.append(h)
         h = h.type(x.dtype)
         if self.predict_codebook_ids:
             return self.id_predictor(h)
+        elif return_features:
+            return self.out(h), features
         else:
             return self.out(h)
 

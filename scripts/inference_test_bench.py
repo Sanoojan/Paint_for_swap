@@ -3,6 +3,7 @@ import cv2
 import torch
 import numpy as np
 from omegaconf import OmegaConf
+# import pandas as pd
 from PIL import Image
 from tqdm import tqdm, trange
 # from imwatermark import WatermarkEncoder
@@ -23,15 +24,30 @@ from transformers import AutoFeatureExtractor
 
 from ldm.data.test_bench_dataset import COCOImageDataset
 from ldm.data.test_bench_dataset import CelebAdataset
-import clip
+# import clip
 from torchvision.transforms import Resize
+
+
+from PIL import Image
+from torchvision.transforms import PILToTensor
+
+# from dift.src.models.dift_sd import SDFeaturizer
+# from dift.src.utils.visualization import Demo
+
+
+# import matplotlib.pyplot as plt
+import torch.nn as nn
+
+# cos = nn.CosineSimilarity(dim=0)
+import numpy as np  
+
 # load safety model
 safety_model_id = "CompVis/stable-diffusion-safety-checker"
 safety_feature_extractor = AutoFeatureExtractor.from_pretrained(safety_model_id)
 safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
-#set cuda device 3
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+#set cuda device 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 
 
@@ -159,6 +175,17 @@ def main():
         help="if enabled, uses the same starting code across samples ",
     )
     parser.add_argument(
+        "--Start_from_target",
+        action='store_true',
+        help="if enabled, uses the noised target image as the starting ",
+    )
+    parser.add_argument(
+        "--target_start_noise_t",
+        type=int,
+        default=1000,
+        help="target_start_noise_t",
+    )
+    parser.add_argument(
         "--ddim_eta",
         type=float,
         default=0.0,
@@ -249,7 +276,7 @@ def main():
         default="autocast"
     )
     opt = parser.parse_args()
-
+    print(opt)
     if opt.laion400m:
         print("Falling back to LAION 400M model...")
         opt.config = "configs/latent-diffusion/txt2img-1p4B-eval.yaml"
@@ -299,7 +326,7 @@ def main():
 
     # test_dataset=COCOImageDataset(test_bench_dir='test_bench') 
     #read config file :configs/v2.yaml
-    conf_file=OmegaConf.load('configs/v2.yaml')
+    conf_file=OmegaConf.load(opt.config)
     # breakpoint()
     test_args=conf_file.data.params.test.params
     
@@ -319,16 +346,43 @@ def main():
     if opt.fixed_code:
         start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
 
+   
+    use_prior=True
+    
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
     sample=0
     with torch.no_grad():
         with precision_scope("cuda"):
             with model.ema_scope():
                 all_samples = list()
-                for test_batch, test_model_kwargs,segment_id_batch in test_dataloader:
+                for test_batch,prior, test_model_kwargs,segment_id_batch in test_dataloader:
                     # sample+=10
-                    # if sample<500:
-                        # continue
+                    # if sample<600:
+                    #     continue
+                    if opt.Start_from_target:
+                        
+                        x=test_batch
+                        x=x.to(device)
+                        encoder_posterior = model.encode_first_stage(x)
+                        z = model.get_first_stage_encoding(encoder_posterior)
+                        t=int(opt.target_start_noise_t)
+                        # t = torch.ones((x.shape[0],), device=device).long()*t
+                        t = torch.randint(t-1, t, (x.shape[0],), device=device).long()
+                  
+                        if use_prior:
+                            prior=prior.to(device)
+                            encoder_posterior_2=model.encode_first_stage(prior)
+                            z2 = model.get_first_stage_encoding(encoder_posterior_2)
+                            noise = torch.randn_like(z2)
+                            x_noisy = model.q_sample(x_start=z2, t=t, noise=noise)
+                            start_code = x_noisy
+                            # print('start from target')
+                        else:
+                            noise = torch.randn_like(z)
+                            x_noisy = model.q_sample(x_start=z, t=t, noise=noise)
+                            start_code = x_noisy
+                        # print('start from target')
+                        
                     test_model_kwargs={n:test_model_kwargs[n].to(device,non_blocking=True) for n in test_model_kwargs }
                     uc = None
                     if opt.scale != 1.0:
@@ -427,3 +481,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

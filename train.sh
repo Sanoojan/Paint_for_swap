@@ -12,7 +12,7 @@
 # --scale_lr False
 
 CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
---logdir models/Paint-by-Example/v4_reconstruct_img_train_reducing_clip/PBE/celebA/ \
+--logdir models/Paint-by-Example/v5_reconstruct_img_train_with_lm_pred/PBE/celebA/ \
 --pretrained_model checkpoints/model.ckpt \
---base configs/v4_reconstruct_img_train_reducing_clip.yaml \
---scale_lr False 
+--base configs/v5_reconstruct_img_train_with_lm_pred.yaml \
+--scale_lr False \

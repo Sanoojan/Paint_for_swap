@@ -356,7 +356,7 @@ class DDIMSampler(object):
 
     def p_sample_ddim_train(self, x, c, t, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
-                      unconditional_guidance_scale=1., unconditional_conditioning=None,**kwargs):
+                      unconditional_guidance_scale=1., unconditional_conditioning=None,return_features=False,**kwargs):
         b, *_, device = *x.shape, x.device
         # if 'test_model_kwargs' in kwargs:
         #     kwargs=kwargs['test_model_kwargs']
@@ -366,11 +366,13 @@ class DDIMSampler(object):
     
             
         if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
-            e_t = self.model.apply_model(x, t, c)
+            e_t = self.model.apply_model(x, t, c,return_features=return_features)
         else:  # check @ sanoojan
             x_in = torch.cat([x] * 2) #x_in: 2,9,64,64
             t_in = torch.cat([t] * 2)
             c_in = torch.cat([unconditional_conditioning, c]) #c_in: 2,1,768
+            if return_features:
+                e_t_uncond, e_t,features = self.model.apply_model(x_in, t_in, c_in,return_features=return_features).chunk(3)
             e_t_uncond, e_t = self.model.apply_model(x_in, t_in, c_in).chunk(2)
             e_t = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond) #1,4,64,64
 

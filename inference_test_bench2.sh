@@ -1,10 +1,10 @@
 
 # Set variables
-name="v4_reconstruct_img_train_with_DIFT_recon_1000_noise"
+name="v4_reconstruct_img_train_with_DIFT_recon_600_noise"
 Results_dir="results/${name}"
 Results_out="results/${name}/results"
 Write_results="results/quantitative/P4s/${name}"
-device=3
+device=2
 
 CONFIG="configs/v4_reconstruct_img_train.yaml"
 CKPT="models/Paint-by-Example/ID_Landmark_CLIP_reconstruct_img_train/PBE/celebA/2023-10-07T21-09-06_v4_reconstruct_img_train/checkpoints/last.ckpt"
@@ -32,7 +32,7 @@ CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 5 \
-    --target_start_noise_t 1000 \
+    --target_start_noise_t 600 \
     --Start_from_target
 
 

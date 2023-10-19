@@ -249,23 +249,7 @@ class CelebAdataset(data.Dataset):
             # A.ISONoise(p=0.3),
             # A.Solarize(p=0.3),
             ])
-        # self.torch_random_trans=transforms.Compose([
-            
-        #     transforms.RandomHorizontalFlip(p=0.5),
-        #     transforms.RandomRotation(20),
-        #     transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
-        #     transforms.GaussianBlur(5),
-        #     transforms.,
-        #     ])
-        # bad_list=[
-        #     '1af17f3d912e9aac.txt',
-        #     '1d5ef05c8da80e31.txt',
-        #     '3095084b358d3f2d.txt',
-        #     '3ad7415a11ac1f5e.txt',
-        #     '42a30d8f8fba8b40.txt',
-        #     '1366cde3b480a15c.txt',
-        #     '03a53ed6ab408b9f.txt'
-        # ]
+        
         
         self.bbox_path_list=[]
         if state == "train":
@@ -378,25 +362,13 @@ class CelebAdataset(data.Dataset):
         img_p_np = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
         ref_image_tensor=img_p_np
         # resize mask_img
-        # mask_img_r = mask_img.resize(img_p_np.shape[1::-1], Image.NEAREST)
-        
-        
-        # select only mask_img region from reference image
-        # ref_image_tensor[mask_img_r==0]=0   # comment this if full img should be used
+       
     
         
         # ref_image_tensor=self.random_trans(image=ref_image_tensor)
         ref_image_tensor=Image.fromarray(ref_image_tensor)
         ref_image_tensor=get_tensor_clip()(ref_image_tensor)
-        #mask ref_image_tensor where mask_img_r==0
-        # get mask_img_r in 3 channels
-        # mask_img_r = mask_img.resize(ref_image_tensor.shape[1::], Image.NEAREST)
-        # mask_img_r = np.array(mask_img_r)
-        
-        # mask_img_r = np.repeat(mask_img_r[np.newaxis,:, :], 3, axis=0)
-        # ref_image_tensor=ref_image_tensor*mask_img_r
-
-
+       
 
         ### Generate mask
         image_tensor = get_tensor()(img_p)
