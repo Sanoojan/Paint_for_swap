@@ -1,9 +1,8 @@
 
 # Set variables
-Results_out="results/v4_reconstruct_img_train_with_neck_DDIM/results"
-# Results_out="/home/sanoojan/other_swappers/SimSwap/output/CelebA/results"
-# 
-Write_results="results/quantitative/P4s/check"
+Results_out="/home/sanoojan/other_swappers/SimSwap/output/FFHQ/results"
+# Results_out="results_FFHQ/v4_reconstruct_img_train_with_DIFT_prior_1000/results"
+Write_results="results_FFHQ/quantitative/SimSwap/512_model"
 
 # Set variables
 # name="avg_3_features_full_face_with_augs_scale1"
@@ -13,13 +12,14 @@ Write_results="results/quantitative/P4s/check"
 # Write_results="results/quantitative/P4s/check-target_id"
 device=1
 
-CONFIG="configs/v3_Landmark_cond.yaml"
-CKPT="models/Paint-by-Example/Arcface_features_clip_avg_landmarks_full_face_mask_new_augs/PBE/celebA/2023-10-04T10-53-42_v3_Landmark_cond/checkpoints/last.ckpt"
-source_path="dataset/FaceData/CelebAMask-HQ/Val"
-target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
-source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
-target_mask_path="dataset/FaceData/CelebAMask-HQ/target_mask"
-Dataset_path="dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img"
+
+# CONFIG="configs/v3_Landmark_cond.yaml"
+# CKPT="models/Paint-by-Example/Arcface_features_clip_avg_landmarks_full_face_mask_new_augs/PBE/celebA/2023-10-04T10-53-42_v3_Landmark_cond/checkpoints/last.ckpt"
+source_path="dataset/FaceData/FFHQ/Val"
+target_path="dataset/FaceData/FFHQ/Val_target"
+source_mask_path="dataset/FaceData/FFHQ/src_mask"
+target_mask_path="dataset/FaceData/FFHQ/target_mask"
+Dataset_path="dataset/FaceData/FFHQ/images512"
 
 current_time=$(date +"%Y%m%d_%H%M%S")
 output_filename="${Write_results}/out_${current_time}.txt"
@@ -49,14 +49,14 @@ fi
 #     "${target_path}" \
 #     "${Results_out}"  >> "$output_filename"
 
-# echo "ID similarity with Source:"
+echo "ID similarity with Source:"
 CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
     "${source_path}" \
     "${Results_out}" \
     "${source_mask_path}" \
     "${target_mask_path}"  
-
->> "$output_filename"  
+    
+    # >> "$output_filename"  
 
 
 # echo "ID similarity with Target:"
@@ -64,11 +64,10 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --d
 #     "${target_path}" \
 #     "${Results_out}" \
 #     "${target_mask_path}" \
-#     "${target_mask_path}" 
-    
-#     #  >> "$output_filename"  
+#     "${target_mask_path}"  >> "$output_filename"  
 
 echo "ID_restoreformer"
 CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
     "${Results_out}" \
     --gt_folder "${source_path}" 
+

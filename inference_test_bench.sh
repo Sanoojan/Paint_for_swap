@@ -1,13 +1,13 @@
 
 # Set variables
-name="v4_reconstruct_img_train_with_DIFT_recon_1000_noise"
+name="check"
 Results_dir="results/${name}"
 Results_out="results/${name}/results"
 Write_results="results/quantitative/P4s/${name}"
-device=3
+device=1
 
-CONFIG="configs/v4_reconstruct_img_train.yaml"
-CKPT="models/Paint-by-Example/ID_Landmark_CLIP_reconstruct_img_train/PBE/celebA/2023-10-07T21-09-06_v4_reconstruct_img_train/checkpoints/last.ckpt"
+CONFIG="configs/v7_reconstruct_img_train_concat_feat.yaml"
+CKPT="models/Paint-by-Example/v7_reconstruct_img_train_concat_feat/PBE/celebA/2023-10-27T00-54-41_v7_reconstruct_img_train_concat_feat/checkpoints/last.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -32,24 +32,28 @@ CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 5 \
-    --target_start_noise_t 1000 \
-    --Start_from_target
+    --dataset "CelebA" 
+
+
+    # --Start_from_target \
+    # --target_start_noise_t 700  
+    
 
 
 echo "FID score with Source:"
-CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-    "${source_path}" \
-    "${Results_out}"  >> "$output_filename"
+# CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+#     "${source_path}" \
+#     "${Results_out}"  >> "$output_filename"
 
-echo "FID score with Dataset:"
-CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-    "${Dataset_path}" \
-    "${Results_out}"  >> "$output_filename"
+# echo "FID score with Dataset:"
+# CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+#     "${Dataset_path}" \
+#     "${Results_out}"  >> "$output_filename"
 
-echo "Pose comarison with target:"
-CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
-    "${target_path}" \
-    "${Results_out}"  >> "$output_filename"
+# echo "Pose comarison with target:"
+# CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
+#     "${target_path}" \
+#     "${Results_out}"  >> "$output_filename"
 
 echo "ID similarity with Source:"
 CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
@@ -65,3 +69,8 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --d
     "${Results_out}" \
     "${target_mask_path}" \
     "${target_mask_path}"  >> "$output_filename"  
+
+echo "ID_restoreformer"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
+    "/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_crop/results" \
+    --gt_folder "${source_path}"   >> "$output_filename"  

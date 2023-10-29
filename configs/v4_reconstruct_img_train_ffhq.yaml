@@ -72,19 +72,17 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenCLIPImageEmbedder
       other_params:
-        clip_weight: 1.0
-        ID_weight: 0.0
-        Landmark_cond: False
-        Landmarks_weight: 0.0
+        clip_weight: 0.4
+        ID_weight: 0.6
+        Landmark_cond: True
+        Landmarks_weight: 0.05
         arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
         Additional_config:
-          Reconstruct_initial: False
+          Reconstruct_initial: True
           Reconstruct_DDIM_steps: 5
-          ID_loss_weight: 0.0
-          LPIPS_loss_weight: 0.0
+          ID_loss_weight: 0.3
+          LPIPS_loss_weight: 0.1
           Landmark_loss_weight: 0
-      
-      
         
 
 # data:
@@ -120,27 +118,27 @@ data:
       batch_size: 4
       wrap: False
       train:
-          target: ldm.data.celebA.CelebAdataset
+          target: ldm.data.ffhq.FFHQdataset
           params:
               state: train
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
+              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/FFHQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
 
       validation:
-          target: ldm.data.celebA.CelebAdataset
+          target: ldm.data.ffhq.FFHQdataset
           params:
               state: validation
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
+              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/FFHQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
       test:
-          target: ldm.data.celebA.CelebAdataset
+          target: ldm.data.ffhq.FFHQdataset
           params:
               state: test
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
+              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/FFHQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
 

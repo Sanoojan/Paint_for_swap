@@ -76,6 +76,13 @@ model:
         ID_weight: 0.5
         Landmark_cond: True
         Landmarks_weight: 0.05
+        arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
+        Additional_config:
+          Reconstruct_initial: True
+          Reconstruct_DDIM_steps: 5
+          ID_loss_weight: 0.3
+          LPIPS_loss_weight: 0.1
+          Landmark_loss_weight: 0
       
         
 

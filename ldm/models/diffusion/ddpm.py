@@ -66,7 +66,7 @@ class IDLoss(nn.Module):
         self.facenet = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
         # self.facenet=iresnet100(pretrained=False, fp16=False) # changed by sanoojan
         
-        self.facenet.load_state_dict(torch.load("/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"))
+        self.facenet.load_state_dict(torch.load(opts.other_params.arcface_path))
         self.face_pool_2 = torch.nn.AdaptiveAvgPool2d((112, 112))
         self.facenet.eval()
         
@@ -578,10 +578,19 @@ class LatentDiffusion(DDPM):
                 self.Landmark_loss_weight=cond_stage_config.other_params.Additional_config.Landmark_loss_weight
                 if self.LPIPS_loss_weight>0:
                     self.lpips_loss = LPIPS(net_type='alex').to(self.device).eval()
+                if hasattr(cond_stage_config.other_params, 'concat_feat'):
+                    self.concat_feat=cond_stage_config.other_params.concat_feat
+                else:
+                    self.concat_feat=False
+                    
+                if self.concat_feat:
+                    self.concat_feat_proj=nn.Linear(768*2+136, 768)
+                    # self.concat_feat_proj_out=nn.Linear(768, 768)
                     
             else:
                 self.Reconstruct_initial=False
                 self.Reconstruct_DDIM_steps=0
+                
             self.update_weight=False  
                 
         else:
@@ -603,6 +612,8 @@ class LatentDiffusion(DDPM):
                     
                         
             self.landmark_proj_out=nn.Linear(136, 768)
+            if self.concat_feat:
+                self.landmark_proj_out=nn.Identity()
             
         # total_devices = self.hparams.n_gpus * self.hparams.n_nodes
         # self.train_batches = len(self.train_dataloader()) // total_devices
@@ -768,6 +779,8 @@ class LatentDiffusion(DDPM):
                 # print("weights:",self.clip_weight,self.ID_weight)
                     
         
+        
+        
         if self.ID_weight>0:
             c2=self.face_ID_model.extract_feats(x)[0]
             c2 = self.ID_proj_out(c2) #-->c:[4,768]
@@ -775,6 +788,33 @@ class LatentDiffusion(DDPM):
         if self.clip_weight>0:
             c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
             c = self.proj_out(c) #-->c:[4,1,768]
+        if self.Landmark_cond==False:
+            return (c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)   
+        landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
+        if self.concat_feat:
+            # concat c ,c2, landmarks
+            conc=torch.cat([c,c2,landmarks],dim=-1)
+            return self.concat_feat_proj(conc)
+        
+        
+        c=(c*self.clip_weight+c2*self.ID_weight+landmarks *self.Landmarks_weight)/(self.clip_weight+self.ID_weight+self.Landmarks_weight)
+        # c = c.float()
+        
+
+        return c
+    
+    def conditioning_with_feat_given_features(self,landmarks=None,c2=None,c=None):
+        # c=0
+        # c2=0
+          
+        
+        # if self.ID_weight>0:
+        #     c2=self.face_ID_model.extract_feats(x)[0]
+        #     c2 = self.ID_proj_out(c2) #-->c:[4,768]
+        #     c2 = c2.unsqueeze(1) #-->c:[4,1,768]
+        # if self.clip_weight>0:
+        #     c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
+        #     c = self.proj_out(c) #-->c:[4,1,768]
         if self.Landmark_cond==False:
             return (c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)
         landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
@@ -1174,7 +1214,7 @@ class LatentDiffusion(DDPM):
                 tc = self.cond_ids[t].to(self.device)
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
 
-        if self.u_cond_prop<self.u_cond_percent:
+        if self.u_cond_prop<self.u_cond_percent and self.training :
             return self.p_losses(x, self.learnable_vector.repeat(x.shape[0],1,1), t, *args, **kwargs)
         else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
             return self.p_losses(x, c, t, *args, **kwargs)
@@ -1191,7 +1231,7 @@ class LatentDiffusion(DDPM):
                 tc = self.cond_ids[t].to(self.device)
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
 
-        if self.u_cond_prop<self.u_cond_percent:
+        if self.u_cond_prop<self.u_cond_percent and self.training :
             return self.p_losses_face(x, self.learnable_vector.repeat(x.shape[0],1,1), t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)
         else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
             return self.p_losses_face(x, c, t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)
@@ -1381,7 +1421,9 @@ class LatentDiffusion(DDPM):
         
         model_output,features = self.apply_model(x_noisy, t, cond,return_features=True)
         feat_cat=torch.cat(features[9:11],dim=1)
-        landmark_pred=self.landmark_predictor(feat_cat)
+        
+        if self.Landmark_loss_weight>0:
+            landmark_pred=self.landmark_predictor(feat_cat)
         
         ########################
         ddim_steps=self.Reconstruct_DDIM_steps

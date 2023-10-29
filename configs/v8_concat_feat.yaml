@@ -72,19 +72,18 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenCLIPImageEmbedder
       other_params:
-        clip_weight: 1.0
-        ID_weight: 0.0
-        Landmark_cond: False
-        Landmarks_weight: 0.0
+        clip_weight: 0.5
+        ID_weight: 0.5
+        Landmark_cond: True
+        Landmarks_weight: 0.05
         arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
+        concat_feat: True
         Additional_config:
           Reconstruct_initial: False
           Reconstruct_DDIM_steps: 5
-          ID_loss_weight: 0.0
-          LPIPS_loss_weight: 0.0
+          ID_loss_weight: 0.3
+          LPIPS_loss_weight: 0.1
           Landmark_loss_weight: 0
-      
-      
         
 
 # data:
@@ -117,7 +116,7 @@ model:
 data:
   target: main_swap.DataModuleFromConfig
   params:
-      batch_size: 4
+      batch_size: 8
       wrap: False
       train:
           target: ldm.data.celebA.CelebAdataset

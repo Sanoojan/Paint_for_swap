@@ -23,7 +23,7 @@ from diffusers.pipelines.stable_diffusion.safety_checker import StableDiffusionS
 from transformers import AutoFeatureExtractor
 
 from ldm.data.test_bench_dataset import COCOImageDataset
-from ldm.data.test_bench_dataset import CelebAdataset
+from ldm.data.test_bench_dataset import CelebAdataset,FFHQdataset,FFdataset
 # import clip
 from torchvision.transforms import Resize
 
@@ -240,6 +240,11 @@ def main():
         help="unconditional guidance scale: eps = eps(x, empty) + scale * (eps(x, cond) - eps(x, empty))",
     )
     parser.add_argument(
+        "--dataset",
+        type=str,
+        help="dataset: CelebA,FFHQ",
+    )
+    parser.add_argument(
         "--from-file",
         type=str,
         help="if specified, load prompts from this file",
@@ -330,7 +335,15 @@ def main():
     # breakpoint()
     test_args=conf_file.data.params.test.params
     
-    test_dataset=CelebAdataset(split='test',**test_args)
+    if opt.dataset=='CelebA':
+        test_dataset=CelebAdataset(split='test',**test_args)
+        
+    elif opt.dataset=='FFHQ':
+        test_dataset=FFHQdataset(split='test',**test_args)
+        
+    elif opt.dataset=='FF++':
+        test_dataset=FFdataset(split='test',**test_args)
+        
     test_dataloader= torch.utils.data.DataLoader(test_dataset, 
                                         batch_size=batch_size, 
                                         num_workers=4, 

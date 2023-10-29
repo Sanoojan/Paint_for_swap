@@ -21,23 +21,40 @@ prompt = f'a photo of a human face'
 img_size = 512
 ensemble_size = 8
 t=261
-save_path='intermediate_results_261'
+save_path='intermediate_results_FFHQ_261'
 
 #make a folder to save results
 import os
 if not os.path.exists(save_path+"/results"):
     os.makedirs(save_path+"/results")
 
+Dataset='FFHQ'
 
+if Dataset=='CelebA-HQ':
+    # This is for CelebA-HQ
+    src_start=29000
+    tar_start=28000
 
-src_start=29000
-tar_start=28000
+elif Dataset=='FFHQ':
+    # This is for FFHQ
+    src_start=69000
+    tar_start=68000
 
 for im in tqdm(range(1000)):
     src_id=im+src_start
     tar_id=im+tar_start
-    filelist = ['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img/'+str(tar_id) +'.jpg', '/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img/'+str(src_id) +'.jpg']
-    source_mask_path='/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-mask/14/'+str(tar_id) +'_skin.png'
+    
+    if Dataset=='CelebA-HQ':
+        # This is for CelebA-HQ
+        filelist = ['dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img/'+str(tar_id) +'.jpg', 'dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img/'+str(src_id) +'.jpg']
+        source_mask_path='dataset/FaceData/CelebAMask-HQ/CelebA-HQ-mask/14/'+str(tar_id) +'_skin.png'
+    elif Dataset=='FFHQ':
+        # This is for FFHQ
+        filelist = ['dataset/FaceData/FFHQ/Val_target/'+str(tar_id) +'.png', 'dataset/FaceData/FFHQ/Val/'+str(src_id) +'.png']
+        source_mask_path='dataset/FaceData/FFHQ/target_mask/'+str(tar_id) +'.png'
+    
+    
+    
     
     ft = []
     imglist = []
@@ -59,11 +76,27 @@ for im in tqdm(range(1000)):
     
     mask=Image.open(source_mask_path).convert('L')
     mask=mask.resize((img_size,img_size))
+    if Dataset=='FFHQ':
+        preserve = [1,2,3,5,6,7,8,9]
+        # if the mask is not in the preserve list, then make it 0
+        mask=np.array(mask)
+        mask_im = np.isin(mask, preserve)
+
+        # Create a converted_mask where preserved values are set to 255
+        converted_mask = np.zeros_like(mask)
+        converted_mask[mask_im] = 255
+        # convert to PIL image
+        mask=Image.fromarray(converted_mask).convert('L')
+        
     # convert mask to torch tensor
     mask_tensor = (PILToTensor()(mask) / 255.0) 
+    
+    
+        
+    
     # find the indices where the mask is 1
     mask_indices_or = torch.nonzero(mask_tensor[0])
-
+    # breakpoint()
     img_tensors=[]
     for im in imglist:
         img_tensors.append((PILToTensor()(im) / 255.0 - 0.5) * 2)

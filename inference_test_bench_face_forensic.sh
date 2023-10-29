@@ -1,18 +1,18 @@
 
 # Set variables
-name="v4_reconstruct_img_train_with_neck_DIFT_700"
-Results_dir="results/${name}"
-Results_out="results/${name}/results"
-Write_results="results/quantitative/P4s/${name}"
-device=1
+name="v4_reconstruct_img_train_with_DIFT"
+Results_dir="results_FF++/${name}"
+Results_out="results_FF++/${name}/results"
+Write_results="results_FF++/quantitative/P4s/${name}"
+device=2
 
-CONFIG="configs/v4_reconstruct_img_train.yaml"
+CONFIG="configs/v4_reconstruct_img_train_ff.yaml"
 CKPT="models/Paint-by-Example/ID_Landmark_CLIP_reconstruct_img_train/PBE/celebA/2023-10-07T21-09-06_v4_reconstruct_img_train/checkpoints/last.ckpt"
-source_path="dataset/FaceData/CelebAMask-HQ/Val"
-target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
-source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
-target_mask_path="dataset/FaceData/CelebAMask-HQ/target_mask"
-Dataset_path="dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img"
+source_path="dataset/FaceData/FF++/Val"
+target_path="dataset/FaceData/FF++/Val_target"
+source_mask_path="dataset/FaceData/FF++/src_mask"
+target_mask_path="dataset/FaceData/FF++/target_mask"
+Dataset_path="dataset/FaceData/FF++/faceforensics_benchmark_images"
 
 current_time=$(date +"%Y%m%d_%H%M%S")
 output_filename="${Write_results}/out_${current_time}.txt"
@@ -32,10 +32,10 @@ CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 5 \
-    --dataset "CelebA" \
-    --Start_from_target \
-    --target_start_noise_t 700  
-    
+    --dataset "FF++" 
+
+    # --target_start_noise_t 700 \
+    # --Start_from_target  
 
 
 echo "FID score with Source:"
@@ -67,8 +67,3 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --d
     "${Results_out}" \
     "${target_mask_path}" \
     "${target_mask_path}"  >> "$output_filename"  
-
-echo "ID_restoreformer"
-CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
-    "/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_crop/results" \
-    --gt_folder "${source_path}"   >> "$output_filename"  

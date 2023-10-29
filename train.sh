@@ -12,7 +12,8 @@
 # --scale_lr False
 
 CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
---logdir models/Paint-by-Example/v5_reconstruct_img_train_with_lm_pred/PBE/celebA/ \
+--logdir models/Paint-by-Example/v7_reconstruct_img_train_concat_feat/PBE/celebA/ \
 --pretrained_model checkpoints/model.ckpt \
---base configs/v5_reconstruct_img_train_with_lm_pred.yaml \
+--base configs/v7_reconstruct_img_train_concat_feat.yaml \
 --scale_lr False \
+--resume models/Paint-by-Example/v7_reconstruct_img_train_concat_feat/PBE/celebA/2023-10-27T00-54-41_v7_reconstruct_img_train_concat_feat/checkpoints/epoch=000012.ckpt

@@ -228,7 +228,7 @@ def __celebAHQ_masks_to_faceParser_mask(celebA_mask):
 
 
 
-class CelebAdataset(data.Dataset):
+class FFHQdataset(data.Dataset):
     def __init__(self,state,arbitrary_mask_percent=0,load_vis_img=False,label_transform=None,fraction=1.0,**args
         ):
         self.label_transform=label_transform
@@ -250,7 +250,7 @@ class CelebAdataset(data.Dataset):
             # A.Solarize(p=0.3),
             ])
         
-        self.Fullmask=False
+        self.Fullmask=True 
         
         self.bbox_path_list=[]
         if state == "train":
@@ -282,7 +282,49 @@ class CelebAdataset(data.Dataset):
         self.indices = np.arange(len(self.imgs))
         self.length=len(self.indices)
 
+    def load_single_image(self, index):
+        """Load one sample for training, inlcuding 
+            - the image, 
+            - the semantic image, 
+            - the corresponding visualization image
 
+        Args:
+            index (int): index of the sample
+        Return:
+            img: RGB image
+            label: seg mask
+            label_vis: visualization of the seg mask
+        """
+        img = self.imgs[index]
+        img = Image.open(img).convert('RGB')
+        if self.img_transform is not None:
+            img = self.img_transform(img)
+
+        label = self.labels[index]
+        # print(label)
+        label = Image.open(label).convert('L')
+        # breakpoint()
+        # label2=TO_TENSOR(label)
+        # save_image(label2, str(index)+'_label.png')
+        # save_image(img, str(index)+'_img.png')  
+        
+        if self.label_transform is not None:
+            label= self.label_transform(label)
+ 
+
+        if self.load_vis_img:
+            label_vis = self.labels_vis[index]
+            label_vis = Image.open(label_vis).convert('RGB')
+            label_vis = TO_TENSOR(label_vis)
+        else:
+            label_vis = -1  # unified interface
+        # save_image(label, str(index)+'_label.png')
+        # save_image(img, str(index)+'_img.png')  
+
+        return img, label, label_vis
+  
+
+    
     def __getitem__(self, index):
 
         img_path = self.imgs[index]
@@ -305,7 +347,7 @@ class CelebAdataset(data.Dataset):
         # Create a mask to preserve values in the 'preserve' list
         # preserve = [1,2,4,5,8,9,17 ]
         # preserve = [1,2,4,5,8,9 ]
-        preserve = [1,2,4,5,8,9 ,6,7,10,11,12,17 ] # full mask to be changed
+        preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # full mask to be changed
         mask = np.isin(mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255
@@ -364,7 +406,17 @@ class CelebAdataset(data.Dataset):
    
         return {"GT":image_tensor_resize,"inpaint_image":inpaint_tensor_resize,"inpaint_mask":mask_tensor_resize,"ref_imgs":ref_image_tensor}
 
-   
+    # def __getitem__(self, idx):
+    #     index = self.indices[idx]
+    #     img, label, label_vis = self.load_single_image(index)
+    #     if self.flip_p > 0:
+    #         if random.random() < self.flip_p:
+    #             img = TF.hflip(img)
+    #             label = TF.hflip(label)
+           
+    #     return img, label, label_vis
+    
+    
     def __getitem_old__(self, index):
 
         

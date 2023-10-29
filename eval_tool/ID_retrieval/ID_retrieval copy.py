@@ -36,8 +36,7 @@ from torch.nn.functional import adaptive_avg_pool2d
 from src.Face_models.encoders.model_irse import Backbone
 # import clip
 import torchvision
-from eval_tool.ID_retrieval.iresnet50 import iresnet50,iresnet100
-from eval_tool.ID_retrieval import cosface_net as cosface
+from eval_tool.ID_retrieval.iresnet50 import iresnet50
 try:
     from tqdm import tqdm
 except ImportError:
@@ -130,9 +129,7 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         ref_mask_img = Image.open(mask_path).convert('L')
         ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
 
-        # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # CelebA-HQ
-        preserve = [1,2,3,5,6,7,9]  # FFHQ or FF++
-        
+        preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
         # preserve = [1,2,4,5,8,9 ]
         ref_mask= np.isin(ref_mask_img, preserve)
 
@@ -145,7 +142,7 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         
         ref_mask_img_r = ref_converted_mask.resize(image.shape[1::-1], Image.NEAREST)
         ref_mask_img_r = np.array(ref_mask_img_r)
-        image[ref_mask_img_r==0]=0
+        # image[ref_mask_img_r==0]=0
         
         image=self.trans(image=image)
         image=Image.fromarray(image["image"])
@@ -353,22 +350,11 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
 
     # block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
     
-    # cosface_state_dict = torch.load("eval_tool/Face_rec_models/backbone.pth")
-    # CosFace = iresnet50()
-    
-    # cosface_state_dict = torch.load("eval_tool/Face_rec_models/iresnet100_cosface/backbone.pth")
-    # CosFace = iresnet100()
-    
-    
-    cosface_state_dict = torch.load('/home/sanoojan/Paint_for_swap/eval_tool/Face_rec_models/cosface/net_sphere20_data_vggface2_acc_9955.pth')
-    CosFace = cosface.sphere().cuda()
-    
-    
+    cosface_state_dict = torch.load("eval_tool/Face_rec_models/backbone.pth")
+    CosFace = iresnet50()
     CosFace.load_state_dict(cosface_state_dict)
     CosFace.eval()
     CosFace.to(device)
-    
-    
 
 
     # # model = InceptionV3([block_idx]).to(device)
