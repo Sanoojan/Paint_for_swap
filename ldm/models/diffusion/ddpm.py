@@ -34,7 +34,7 @@ from src.Face_models.encoders.model_irse import Backbone
 import dlib
 from eval_tool.lpips.lpips import LPIPS
 
-
+from PIL import Image
 
 
 __conditioning_keys__ = {'concat': 'c_concat',
@@ -49,11 +49,31 @@ def disabled_train(self, mode=True):
     does not change anymore."""
     return self
 
-def un_norm_clip(x):
+def un_norm_clip(x1):
+    x = x1*1.0
+
     x[0,:,:] = x[0,:,:] * 0.26862954 + 0.48145466
     x[1,:,:] = x[1,:,:] * 0.26130258 + 0.4578275
     x[2,:,:] = x[2,:,:] * 0.27577711 + 0.40821073
+    
     return x
+
+def un_norm(x):
+    return (x+1.0)/2.0
+ 
+def save_clip_img(img, path,clip=True):
+    if clip:
+        img=un_norm_clip(img)
+    else:
+        img=torch.clamp(un_norm(img), min=0.0, max=1.0)
+    img = img.cpu().numpy().transpose((1, 2, 0))
+    img = (img * 255).astype(np.uint8)
+    img = Image.fromarray(img)
+    img.save(path)
+    # if clip:
+    #     img=TF.normalize(img, mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
+    # else:  
+    #     img=TF.normalize(img, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 
 
 class IDLoss(nn.Module):
@@ -76,7 +96,10 @@ class IDLoss(nn.Module):
         for p in self.parameters():
             p.requires_grad = flag
     
-    def extract_feats(self, x):
+    def extract_feats(self, x,clip_img=True):
+        if clip_img:
+            x = un_norm_clip(x)
+            x = TF.normalize(x, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         x = self.face_pool_1(x)  if x.shape[2]!=256 else  x # (1) resize to 256 if needed
         x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
         x = self.face_pool_2(x) # (3) resize to 112 to fit pre-trained model
@@ -86,11 +109,11 @@ class IDLoss(nn.Module):
 
     
 
-    def forward(self, y_hat, y):
+    def forward(self, y_hat, y,clip_img=True):
         n_samples = y.shape[0]
-        y_feats_ms = self.extract_feats(y)  # Otherwise use the feature from there
+        y_feats_ms = self.extract_feats(y,clip_img=clip_img)  # Otherwise use the feature from there
 
-        y_hat_feats_ms = self.extract_feats(y_hat)
+        y_hat_feats_ms = self.extract_feats(y_hat,clip_img=clip_img)
         y_feats_ms = [y_f.detach() for y_f in y_feats_ms]
         
         loss_all = 0
@@ -1436,9 +1459,11 @@ class LatentDiffusion(DDPM):
         t=t
         
         # Here flipping the cond so that different sorce image will go to the model
-        cond=torch.flip(cond,[0]) # 4,1,768
+        # cond=torch.flip(cond,[0]) # 4,1,768
         #flip references
         reference=torch.flip(reference,[0]) # 4,3,224,224
+        
+        cond=self.conditioning_with_feat(reference.to(self.device),landmarks=landmarks).float()
         
         samples_ddim, _ = self.sampler.sample_train(S=ddim_steps,
                                                 conditioning=cond,
@@ -1452,7 +1477,8 @@ class LatentDiffusion(DDPM):
                                                 t=t,
                                                 test_model_kwargs=test_model_kwargs)
 
-        x_samples_ddim = self.decode_first_stage(samples_ddim)
+        
+        x_samples_ddim= self.decode_first_stage(samples_ddim)
         
         # x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
         # x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
@@ -1467,20 +1493,26 @@ class LatentDiffusion(DDPM):
         ID_loss=0
         loss_lpips=0
         loss_landmark=0
+        
         if reference is not None:
             reference=un_norm_clip(reference)
             reference = TF.normalize(reference, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            
             # reference=TF.resize(reference,(256,256))
             
             # x_samples_ddim=TF.resize(x_samples_ddim,(256,256))
-            masks=TF.resize(x_start[:,8,:,:],(x_samples_ddim.shape[2],x_samples_ddim.shape[3]))
+            masks=1-TF.resize(x_start[:,8,:,:],(x_samples_ddim.shape[2],x_samples_ddim.shape[3]))
             #mask x_samples_ddim
-            x_samples_ddim=x_samples_ddim*masks.unsqueeze(1)
+            x_samples_ddim_masked=x_samples_ddim*masks.unsqueeze(1)
+            # x_samples_ddim_masked=un_norm_clip(x_samples_ddim_masked)
+            # x_samples_ddim_masked = TF.normalize(x_samples_ddim_masked, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
             
-            ID_loss,sim_imp,_=self.face_ID_model(x_samples_ddim,reference)
+            ID_loss,sim_imp,_=self.face_ID_model(x_samples_ddim_masked,reference,clip_img=False)
             loss_dict.update({f'{prefix}/ID_loss': ID_loss})
             loss_dict.update({f'{prefix}/sim_imp': sim_imp})
             
+            # x_samples_dd=un_norm_clip(x_samples_ddim)
+            # x_samples_dd = TF.normalize(x_samples_dd, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
             
             if self.LPIPS_loss_weight>0:
                 

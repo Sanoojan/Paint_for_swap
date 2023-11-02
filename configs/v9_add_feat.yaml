@@ -79,9 +79,9 @@ model:
         arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
         concat_feat: False
         Additional_config:
-          Reconstruct_initial: True
+          Reconstruct_initial: False
           Reconstruct_DDIM_steps: 5
-          ID_loss_weight: 0.1
+          ID_loss_weight: 0.3
           LPIPS_loss_weight: 0.1
           Landmark_loss_weight: 0
         
@@ -119,10 +119,10 @@ data:
       batch_size: 4
       wrap: False
       train:
-          target: ldm.data.ffhq.FFHQdataset
+          target: ldm.data.celebA.CelebAdataset
           params:
               state: train
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/FFHQ/
+              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
@@ -130,24 +130,25 @@ data:
               preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
 
       validation:
-          target: ldm.data.ffhq.FFHQdataset
+          target: ldm.data.celebA.CelebAdataset
           params:
               state: validation
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/FFHQ/
+              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
               gray_outer_mask: True
-              preserve_mask: [1,2,3,5,6,7,9]
+              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
       test:
-          target: ldm.data.ffhq.FFHQdataset
+          target: ldm.data.celebA.CelebAdataset
           params:
               state: test
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/FFHQ/
+              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
               gray_outer_mask: True
-              preserve_mask: [1,2,3,5,6,7,9]
+              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12 ]
+
 # lightning:
 #   trainer:
 #     max_epochs: 40
@@ -161,5 +162,3 @@ lightning:
     num_nodes: 1
     accelerator: 'gpu'
     gpus: "0,1"
-
-# 

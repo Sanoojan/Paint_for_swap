@@ -72,16 +72,16 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenCLIPImageEmbedder
       other_params:
-        clip_weight: 0.4
-        ID_weight: 0.6
+        clip_weight: 0.35
+        ID_weight: 0.65
         Landmark_cond: True
         Landmarks_weight: 0.05
         arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
-        concat_feat: True
+        concat_feat: False
         Additional_config:
           Reconstruct_initial: True
           Reconstruct_DDIM_steps: 5
-          ID_loss_weight: 0.3
+          ID_loss_weight: 0.1
           LPIPS_loss_weight: 0.1
           Landmark_loss_weight: 0
         
@@ -126,6 +126,8 @@ data:
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
+              gray_outer_mask: True
+              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
 
       validation:
           target: ldm.data.celebA.CelebAdataset
@@ -135,6 +137,8 @@ data:
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
+              gray_outer_mask: True
+              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
       test:
           target: ldm.data.celebA.CelebAdataset
           params:
@@ -142,7 +146,8 @@ data:
               dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
-
+              gray_outer_mask: True
+              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
 # lightning:
 #   trainer:
 #     max_epochs: 40

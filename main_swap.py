@@ -53,6 +53,7 @@ def get_parser(**parser_kwargs):
         type=str,
         const=True,
         default="",
+        # default="models/Paint-by-Example/v4_reconstruct_img_train_correct_gray_add_feature/PBE/celebA/2023-10-29T23-59-03_v4_reconstruct_img_train_correct/checkpoints/epoch=000017.ckpt",
         nargs="?",
         help="resume from logdir or checkpoint in logdir",
     )

@@ -102,10 +102,13 @@ MASK_CONVERT_TF_DETAILED = transforms.Lambda(
 
 NORMALIZE = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
-def un_norm_clip(x):
+def un_norm_clip(x1):
+    x = x1*1.0
+
     x[0,:,:] = x[0,:,:] * 0.26862954 + 0.48145466
     x[1,:,:] = x[1,:,:] * 0.26130258 + 0.4578275
     x[2,:,:] = x[2,:,:] * 0.27577711 + 0.40821073
+    
     return x
 
 def get_transforms(normalize=True, toTensor=True):
@@ -229,6 +232,7 @@ def __celebAHQ_masks_to_faceParser_mask(celebA_mask):
 
 
 class FFHQdataset(data.Dataset):
+
     def __init__(self,state,arbitrary_mask_percent=0,load_vis_img=False,label_transform=None,fraction=1.0,**args
         ):
         self.label_transform=label_transform
@@ -250,28 +254,42 @@ class FFHQdataset(data.Dataset):
             # A.Solarize(p=0.3),
             ])
         
-        self.Fullmask=True 
+        self.gray_outer_mask=args['gray_outer_mask']
+        self.preserve=args['preserve_mask']
+        
+        
+        # print("gray_outer_mask",self.gray_outer_mask)
+        # print("preserve_mask",self.preserve)
+        # print("..........................................")
+        
+        self.Fullmask=False
         
         self.bbox_path_list=[]
         if state == "train":
-            self.imgs = sorted([osp.join(args['dataset_dir'], "CelebA-HQ-img", "%d.jpg"%idx) for idx in range(28000)])
-            # self.labels = ([osp.join(self.root, "CelebA-HQ-mask", "%d"%int(idx/2000) ,'{0:0=5d}'.format(idx)+'_skin.png') for idx in range(28000)])
-            self.labels =  sorted([osp.join(args['dataset_dir'], "CelebA-HQ-mask/Overall_mask", "%d.png"%idx) for idx in range(28000)]) 
-            self.labels_vis =  sorted([osp.join(args['dataset_dir'], "vis", "%d.png"%idx) for idx in range(28000)]) if self.load_vis_img else None
+            self.imgs = sorted([osp.join(args['dataset_dir'], "images512", '{0:0=5d}.png'.format(idx)) for idx in range(68000)])
+            self.labels = sorted([osp.join(args['dataset_dir'], "BiSeNet_mask",'{0:0=5d}.png'.format(idx))  for idx in range(68000)])
+
         elif state == "validation":
-            self.imgs = sorted([osp.join(args['dataset_dir'], "CelebA-HQ-img", "%d.jpg"%idx) for idx in range(28000, 30000)])
-            # self.labels = ([osp.join(self.root, "CelebA-HQ-mask", "%d"%int(idx/2000) ,'{0:0=5d}'.format(idx)+'_skin.png') for idx in range(28000, 30000)])
-            self.labels =  sorted([osp.join(args['dataset_dir'], "CelebA-HQ-mask/Overall_mask", "%d.png"%idx) for idx in range(28000, 30000)]) 
-            self.labels_vis =  sorted([osp.join(args['dataset_dir'], "vis", "%d.png"%idx) for idx in range(28000, 30000)]) if self.load_vis_img else None
+            self.imgs = sorted([osp.join(args['dataset_dir'], "images512", '{0:0=5d}.png'.format(idx)) for idx in range(68000,70000)])
+            self.labels = sorted([osp.join(args['dataset_dir'], "BiSeNet_mask",'{0:0=5d}.png'.format(idx))  for idx in range(68000,70000)])
+            
         else:
-            self.imgs = sorted([osp.join(args['dataset_dir'], "CelebA-HQ-img", "%d.jpg"%idx) for idx in range(28000, 30000)])
-            # self.labels = ([osp.join(self.root, "CelebA-HQ-mask", "%d"%int(idx/2000) ,'{0:0=5d}'.format(idx)+'_skin.png') for idx in range(28000, 30000)])
-            self.labels =  sorted([osp.join(args['dataset_dir'], "CelebA-HQ-mask/Overall_mask", "%d.png"%idx) for idx in range(28000, 30000)]) 
-            self.labels_vis =  sorted([osp.join(args['dataset_dir'], "vis", "%d.png"%idx) for idx in range(28000, 30000)]) if self.load_vis_img else None
-        
+            self.imgs = sorted([osp.join(args['dataset_dir'], "images512",'{0:0=5d}.png'.format(idx))  for idx in range(68000,69000)])
+            self.labels = sorted([osp.join(args['dataset_dir'], "BiSeNet_mask", '{0:0=5d}.png'.format(idx))  for idx in range(68000,69000)]) 
+            
+
+            self.ref_imgs = sorted([osp.join(args['dataset_dir'], "images512", '{0:0=5d}.png'.format(idx))  for idx in range(69000,70000)])
+            self.ref_labels =  sorted([osp.join(args['dataset_dir'], "BiSeNet_mask", '{0:0=5d}.png'.format(idx))  for idx in range(69000,70000)]) 
+            
+
+            self.ref_imgs= self.ref_imgs[:int(len(self.imgs)*self.fraction)]
+            self.ref_labels= self.ref_labels[:int(len(self.labels)*self.fraction)]
+
+            # if self.load_prior:
+            #     self.prior_images=sorted([osp.join("intermediate_results_FFHQ_261/results", "0000000%d.jpg"%idx) for idx in range(68000, 69000)])
+            
         self.imgs= self.imgs[:int(len(self.imgs)*self.fraction)]
         self.labels= self.labels[:int(len(self.labels)*self.fraction)]
-        self.labels_vis= self.labels_vis[:int(len(self.labels_vis)*self.fraction)]  if self.load_vis_img else None
 
         if self.load_vis_img:
             assert len(self.imgs) == len(self.labels) == len(self.labels_vis)
@@ -282,50 +300,14 @@ class FFHQdataset(data.Dataset):
         self.indices = np.arange(len(self.imgs))
         self.length=len(self.indices)
 
-    def load_single_image(self, index):
-        """Load one sample for training, inlcuding 
-            - the image, 
-            - the semantic image, 
-            - the corresponding visualization image
-
-        Args:
-            index (int): index of the sample
-        Return:
-            img: RGB image
-            label: seg mask
-            label_vis: visualization of the seg mask
-        """
-        img = self.imgs[index]
-        img = Image.open(img).convert('RGB')
-        if self.img_transform is not None:
-            img = self.img_transform(img)
-
-        label = self.labels[index]
-        # print(label)
-        label = Image.open(label).convert('L')
-        # breakpoint()
-        # label2=TO_TENSOR(label)
-        # save_image(label2, str(index)+'_label.png')
-        # save_image(img, str(index)+'_img.png')  
-        
-        if self.label_transform is not None:
-            label= self.label_transform(label)
- 
-
-        if self.load_vis_img:
-            label_vis = self.labels_vis[index]
-            label_vis = Image.open(label_vis).convert('RGB')
-            label_vis = TO_TENSOR(label_vis)
-        else:
-            label_vis = -1  # unified interface
-        # save_image(label, str(index)+'_label.png')
-        # save_image(img, str(index)+'_img.png')  
-
-        return img, label, label_vis
-  
-
-    
     def __getitem__(self, index):
+        if self.gray_outer_mask:
+            return self.__getitem_gray__(index)
+        else:
+            return self.__getitem_black__(index)
+
+
+    def __getitem_gray__(self, index):
 
         img_path = self.imgs[index]
         img_p = Image.open(img_path).convert('RGB')
@@ -347,7 +329,7 @@ class FFHQdataset(data.Dataset):
         # Create a mask to preserve values in the 'preserve' list
         # preserve = [1,2,4,5,8,9,17 ]
         # preserve = [1,2,4,5,8,9 ]
-        preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # full mask to be changed
+        preserve = self.preserve # full mask to be changed
         mask = np.isin(mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255
@@ -391,7 +373,7 @@ class FFHQdataset(data.Dataset):
         
         inpaint_tensor_resize=image_tensor_resize*mask_tensor_resize
         
-        mask_ref=1-T.Resize([1024,1024])(mask_tensor)
+        mask_ref=1-T.Resize([512,512])(mask_tensor)
         ref_image_tensor=ref_image_tensor*mask_ref
         
         # ref_image_tensor=Image.fromarray(ref_image_tensor)
@@ -406,17 +388,70 @@ class FFHQdataset(data.Dataset):
    
         return {"GT":image_tensor_resize,"inpaint_image":inpaint_tensor_resize,"inpaint_mask":mask_tensor_resize,"ref_imgs":ref_image_tensor}
 
-    # def __getitem__(self, idx):
-    #     index = self.indices[idx]
-    #     img, label, label_vis = self.load_single_image(index)
-    #     if self.flip_p > 0:
-    #         if random.random() < self.flip_p:
-    #             img = TF.hflip(img)
-    #             label = TF.hflip(label)
-           
-    #     return img, label, label_vis
+    def __getitem_black__(self, index):
+        # black mask
+        img_path = self.imgs[index]
+        img_p = Image.open(img_path).convert('RGB')
+     
+
+        ############
+        mask_path = self.labels[index]
+        mask_img = Image.open(mask_path).convert('L')
+        mask_img = np.array(mask_img)  # Convert the label to a NumPy array if it's not already
+
+        # Create a mask to preserve values in the 'preserve' list
+        # preserve = [1,2,4,5,8,9,17 ]
+        # preserve = [1,2,4,5,8,9 ]
+        preserve = self.preserve # full mask to be changed
+        mask = np.isin(mask_img, preserve)
+
+        # Create a converted_mask where preserved values are set to 255
+        converted_mask = np.zeros_like(mask_img)
+        converted_mask[mask] = 255
+        # convert to PIL image
+        mask_img=Image.fromarray(converted_mask).convert('L')
+        mask_tensor=1-get_tensor(normalize=False, toTensor=True)(mask_img)
+ 
+ 
+
+        if self.load_vis_img:
+            label_vis = self.labels_vis[index]
+            label_vis = Image.open(label_vis).convert('RGB')
+            label_vis = TO_TENSOR(label_vis)
+        else:
+            label_vis = -1  # unified interface
+        
     
+        img_p_np=cv2.imread(img_path)
+        img_p_np = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
+        ref_image_tensor=img_p_np
+        # resize mask_img
+        mask_img_r = mask_img.resize(img_p_np.shape[1::-1], Image.NEAREST)
+        mask_img_r = np.array(mask_img_r)
+        
+        # select only mask_img region from reference image
+        ref_image_tensor[mask_img_r==0]=0   # comment this if full img should be used
     
+        
+        ref_image_tensor=self.random_trans(image=ref_image_tensor)
+        ref_image_tensor=Image.fromarray(ref_image_tensor["image"])
+        ref_image_tensor=get_tensor_clip()(ref_image_tensor)
+
+
+
+        ### Generate mask
+        image_tensor = get_tensor()(img_p)
+        W,H = img_p.size
+
+        image_tensor_cropped=image_tensor
+        mask_tensor_cropped=mask_tensor
+        image_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(image_tensor_cropped)
+        mask_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(mask_tensor_cropped)
+        inpaint_tensor_resize=image_tensor_resize*mask_tensor_resize
+   
+        return {"GT":image_tensor_resize,"inpaint_image":inpaint_tensor_resize,"inpaint_mask":mask_tensor_resize,"ref_imgs":ref_image_tensor}
+   
+   
     def __getitem_old__(self, index):
 
         
@@ -594,6 +629,17 @@ class FFHQdataset(data.Dataset):
 
     def __len__(self):
         return self.length
+    
+    
+
+
+
+        
+
+
+
+
+
     
     
 

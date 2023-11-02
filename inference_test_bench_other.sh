@@ -1,7 +1,9 @@
 
 # Set variables
 Results_out="results/v4_reconstruct_img_train_with_neck_DDIM/results"
+Results_out="results/v4_reconstruct_img_train_correct_ID_ch/results"
 # Results_out="/home/sanoojan/other_swappers/SimSwap/output/CelebA/results"
+# Results_out="/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_crop/results"
 # 
 Write_results="results/quantitative/P4s/check"
 
@@ -56,7 +58,7 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --d
     "${source_mask_path}" \
     "${target_mask_path}"  
 
->> "$output_filename"  
+# >> "$output_filename"  
 
 
 # echo "ID similarity with Target:"

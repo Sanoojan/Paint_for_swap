@@ -13,7 +13,7 @@ import threading
 import random
 from turtle import left, right
 import numpy as np
-from typing import Callable, List, Tuple, Union
+from typing import Any, Callable, List, Tuple, Union
 from PIL import Image,ImageDraw
 import torch.utils.data as data
 import json
@@ -102,11 +102,18 @@ MASK_CONVERT_TF_DETAILED = transforms.Lambda(
 
 NORMALIZE = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
-def un_norm_clip(x):
+def un_norm_clip(x1):
+    x = x1*1.0
+
     x[0,:,:] = x[0,:,:] * 0.26862954 + 0.48145466
     x[1,:,:] = x[1,:,:] * 0.26130258 + 0.4578275
     x[2,:,:] = x[2,:,:] * 0.27577711 + 0.40821073
+    
     return x
+
+    
+def un_norm(x):
+    return (x+1.0)/2.0
 
 def get_transforms(normalize=True, toTensor=True):
     transform_list = []
@@ -250,6 +257,14 @@ class CelebAdataset(data.Dataset):
             # A.Solarize(p=0.3),
             ])
         
+        self.gray_outer_mask=args['gray_outer_mask']
+        self.preserve=args['preserve_mask']
+        
+        
+        # print("gray_outer_mask",self.gray_outer_mask)
+        # print("preserve_mask",self.preserve)
+        # print("..........................................")
+        
         self.Fullmask=False
         
         self.bbox_path_list=[]
@@ -282,8 +297,14 @@ class CelebAdataset(data.Dataset):
         self.indices = np.arange(len(self.imgs))
         self.length=len(self.indices)
 
-
     def __getitem__(self, index):
+        if self.gray_outer_mask:
+            return self.__getitem_gray__(index)
+        else:
+            return self.__getitem_black__(index)
+
+
+    def __getitem_gray__(self, index):
 
         img_path = self.imgs[index]
         img_p = Image.open(img_path).convert('RGB')
@@ -305,7 +326,7 @@ class CelebAdataset(data.Dataset):
         # Create a mask to preserve values in the 'preserve' list
         # preserve = [1,2,4,5,8,9,17 ]
         # preserve = [1,2,4,5,8,9 ]
-        preserve = [1,2,4,5,8,9 ,6,7,10,11,12,17 ] # full mask to be changed
+        preserve = self.preserve # full mask to be changed
         mask = np.isin(mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255
@@ -364,6 +385,69 @@ class CelebAdataset(data.Dataset):
    
         return {"GT":image_tensor_resize,"inpaint_image":inpaint_tensor_resize,"inpaint_mask":mask_tensor_resize,"ref_imgs":ref_image_tensor}
 
+    def __getitem_black__(self, index):
+        # black mask
+        img_path = self.imgs[index]
+        img_p = Image.open(img_path).convert('RGB')
+     
+
+        ############
+        mask_path = self.labels[index]
+        mask_img = Image.open(mask_path).convert('L')
+        mask_img = np.array(mask_img)  # Convert the label to a NumPy array if it's not already
+
+        # Create a mask to preserve values in the 'preserve' list
+        # preserve = [1,2,4,5,8,9,17 ]
+        # preserve = [1,2,4,5,8,9 ]
+        preserve = self.preserve # full mask to be changed
+        mask = np.isin(mask_img, preserve)
+
+        # Create a converted_mask where preserved values are set to 255
+        converted_mask = np.zeros_like(mask_img)
+        converted_mask[mask] = 255
+        # convert to PIL image
+        mask_img=Image.fromarray(converted_mask).convert('L')
+        mask_tensor=1-get_tensor(normalize=False, toTensor=True)(mask_img)
+ 
+ 
+
+        if self.load_vis_img:
+            label_vis = self.labels_vis[index]
+            label_vis = Image.open(label_vis).convert('RGB')
+            label_vis = TO_TENSOR(label_vis)
+        else:
+            label_vis = -1  # unified interface
+        
+    
+        img_p_np=cv2.imread(img_path)
+        img_p_np = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
+        ref_image_tensor=img_p_np
+        # resize mask_img
+        mask_img_r = mask_img.resize(img_p_np.shape[1::-1], Image.NEAREST)
+        mask_img_r = np.array(mask_img_r)
+        
+        # select only mask_img region from reference image
+        ref_image_tensor[mask_img_r==0]=0   # comment this if full img should be used
+    
+        
+        ref_image_tensor=self.random_trans(image=ref_image_tensor)
+        ref_image_tensor=Image.fromarray(ref_image_tensor["image"])
+        ref_image_tensor=get_tensor_clip()(ref_image_tensor)
+
+
+
+        ### Generate mask
+        image_tensor = get_tensor()(img_p)
+        W,H = img_p.size
+
+        image_tensor_cropped=image_tensor
+        mask_tensor_cropped=mask_tensor
+        image_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(image_tensor_cropped)
+        mask_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(mask_tensor_cropped)
+        inpaint_tensor_resize=image_tensor_resize*mask_tensor_resize
+   
+        return {"GT":image_tensor_resize,"inpaint_image":inpaint_tensor_resize,"inpaint_mask":mask_tensor_resize,"ref_imgs":ref_image_tensor}
+   
    
     def __getitem_old__(self, index):
 

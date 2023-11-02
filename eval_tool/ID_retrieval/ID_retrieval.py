@@ -406,7 +406,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     
     order=np.argsort(similarities)[::-1]
     value=np.sort(similarities)[::-1]
-    breakpoint()
+    # breakpoint()
     
     Mean_dot_prod= np.mean(similarities)
     
