@@ -11,18 +11,19 @@
 # --base configs/v2.yaml \
 # --scale_lr False
 
-# CUDA_VISIBLE_DEVICES=0,1 python -u main_swap.py \
+# CUDA_VISIBLE_DEVICES=0,5 python -u main_swap.py \
 # --logdir models/Paint-by-Example/v9_add_feat/PBE/celebA/ \
 # --pretrained_model checkpoints/model.ckpt \
 # --base configs/v9_add_feat.yaml \
 # --scale_lr False \
-# --resume models/Paint-by-Example/v9_add_feat/PBE/celebA/2023-10-31T22-48-43_v9_add_feat/checkpoints/epoch=000001.ckpt
+# --resume models/Paint-by-Example/v9_add_feat/PBE/celebA/2023-10-31T22-48-43_v9_add_feat/checkpoints/last.ckpt
 
-CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
---logdir models/Paint-by-Example/v4_reconstruct_img_train_correct_gray_add_feature_2_final/PBE/celebA/ \
---pretrained_model checkpoints/model.ckpt \
---base configs/v4_reconstruct_img_train_correct.yaml \
---scale_lr False 
+# CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
+# --logdir models/Paint-by-Example/v4_reconstruct_img_train_correct_gray_add_feature_2_final/PBE/celebA/ \
+# --pretrained_model checkpoints/model.ckpt \
+# --base configs/v4_reconstruct_img_train_correct.yaml \
+# --scale_lr False \
+# --resume models/Paint-by-Example/v4_reconstruct_img_train_correct_gray_add_feature_2_final/PBE/celebA/2023-11-02T13-17-29_v4_reconstruct_img_train_correct/checkpoints/last.ckpt
 
 
 # CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
@@ -31,6 +32,18 @@ CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
 # --base configs/v4_reconstruct_img_train_ffhq.yaml \
 # --scale_lr False \
 # --resume ?????
+
+
+CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
+--logdir models/Paint-by-Example/v4_reconstruct_img_train_correct_id/PBE/celebA/ \
+--pretrained_model checkpoints/model.ckpt \
+--base configs/v4_reconstruct_img_train_correct.yaml \
+--scale_lr False 
+
+
+# --resume models/Paint-by-Example/v10_reconstruct_img_train_correct_attention_layers/PBE/celebA/2023-11-05T00-52-37_v10_reconstruct_img_train_correct_attention_layers/checkpoints/last.ckpt
+
+
 
 
 # --resume models/Paint-by-Example/v4_reconstruct_img_train_correct_gray_add_feature/PBE/celebA/2023-10-29T23-59-03_v4_reconstruct_img_train_correct/checkpoints/last.ckpt

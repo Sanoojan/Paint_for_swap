@@ -50,7 +50,7 @@ def disabled_train(self, mode=True):
     return self
 
 def un_norm_clip(x1):
-    x = x1*1.0
+    x = x1*1.0 # to avoid changing the original tensor or clone() can be used
 
     x[0,:,:] = x[0,:,:] * 0.26862954 + 0.48145466
     x[1,:,:] = x[1,:,:] * 0.26130258 + 0.4578275
@@ -77,16 +77,17 @@ def save_clip_img(img, path,clip=True):
 
 
 class IDLoss(nn.Module):
-    def __init__(self,opts):
+    def __init__(self,opts,multiscale=False):
         super(IDLoss, self).__init__()
         print('Loading ResNet ArcFace')
         self.opts = opts 
-        
+        self.multiscale = multiscale
         self.face_pool_1 = torch.nn.AdaptiveAvgPool2d((256, 256))
         self.facenet = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
         # self.facenet=iresnet100(pretrained=False, fp16=False) # changed by sanoojan
         
         self.facenet.load_state_dict(torch.load(opts.other_params.arcface_path))
+        
         self.face_pool_2 = torch.nn.AdaptiveAvgPool2d((112, 112))
         self.facenet.eval()
         
@@ -97,13 +98,16 @@ class IDLoss(nn.Module):
             p.requires_grad = flag
     
     def extract_feats(self, x,clip_img=True):
+        # breakpoint()
         if clip_img:
             x = un_norm_clip(x)
             x = TF.normalize(x, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         x = self.face_pool_1(x)  if x.shape[2]!=256 else  x # (1) resize to 256 if needed
         x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
         x = self.face_pool_2(x) # (3) resize to 112 to fit pre-trained model
-        x_feats = self.facenet(x, multi_scale=True)
+        # breakpoint()
+        x_feats = self.facenet(x, multi_scale=self.multiscale )
+        
         # x_feats = self.facenet(x) # changed by sanoojan
         return x_feats
 
@@ -599,6 +603,11 @@ class LatentDiffusion(DDPM):
                 self.ID_loss_weight=cond_stage_config.other_params.Additional_config.ID_loss_weight
                 self.LPIPS_loss_weight=cond_stage_config.other_params.Additional_config.LPIPS_loss_weight
                 self.Landmark_loss_weight=cond_stage_config.other_params.Additional_config.Landmark_loss_weight
+                if hasattr(cond_stage_config.other_params, 'multi_scale_ID'):
+                    self.multi_scale_ID=cond_stage_config.other_params.multi_scale_ID   # True has an issue
+                else:
+                    self.multi_scale_ID=True  #this has an issue obtaining earlier layer from ID
+                self.land_mark_id_seperate_layers=cond_stage_config.other_params.land_mark_id_seperate_layers
                 if self.LPIPS_loss_weight>0:
                     self.lpips_loss = LPIPS(net_type='alex').to(self.device).eval()
                 if hasattr(cond_stage_config.other_params, 'concat_feat'):
@@ -623,7 +632,10 @@ class LatentDiffusion(DDPM):
             self.Landmarks_weight=0
             self.Landmark_loss_weight=0
         if self.ID_weight>0:
-            self.ID_proj_out=nn.Linear(200704, 768)
+            if self.multi_scale_ID:
+                self.ID_proj_out=nn.Linear(200704, 768)
+            else:
+                self.ID_proj_out=nn.Linear(512, 768)
             self.instantiate_IDLoss(cond_stage_config)
             
         if self.Landmark_cond or self.Landmark_loss_weight>0:
@@ -705,7 +717,7 @@ class LatentDiffusion(DDPM):
     def instantiate_IDLoss(self, config):
         # Need to modify @sanoojan
         # if not self.cond_stage_trainable:
-        model = IDLoss(config)
+        model = IDLoss(config,multiscale=self.multi_scale_ID)
         self.face_ID_model = model.eval()
         self.face_ID_model.train = disabled_train
         for param in self.face_ID_model.parameters():
@@ -818,7 +830,10 @@ class LatentDiffusion(DDPM):
             # concat c ,c2, landmarks
             conc=torch.cat([c,c2,landmarks],dim=-1)
             return self.concat_feat_proj(conc)
-        
+        if self.land_mark_id_seperate_layers:
+            c=(c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)
+            conc=torch.cat([c,landmarks],dim=-1)
+            return conc
         
         c=(c*self.clip_weight+c2*self.ID_weight+landmarks *self.Landmarks_weight)/(self.clip_weight+self.ID_weight+self.Landmarks_weight)
         # c = c.float()
@@ -1238,6 +1253,12 @@ class LatentDiffusion(DDPM):
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
 
         if self.u_cond_prop<self.u_cond_percent and self.training :
+            if self.land_mark_id_seperate_layers:
+                conc=self.learnable_vector.repeat(x.shape[0],1,1)
+                # concat c, landmarks
+                landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
+                conc=torch.cat([conc,landmarks],dim=-1)
+                return self.p_losses(x, conc, t, *args, **kwargs)
             return self.p_losses(x, self.learnable_vector.repeat(x.shape[0],1,1), t, *args, **kwargs)
         else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
             return self.p_losses(x, c, t, *args, **kwargs)
@@ -1255,6 +1276,12 @@ class LatentDiffusion(DDPM):
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
 
         if self.u_cond_prop<self.u_cond_percent and self.training :
+            if self.land_mark_id_seperate_layers:
+                conc=self.learnable_vector.repeat(x.shape[0],1,1)
+                # concat c, landmarks
+                landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks                
+                conc=torch.cat([conc,landmarks],dim=-1)
+                return self.p_losses_face(x, conc, t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)
             return self.p_losses_face(x, self.learnable_vector.repeat(x.shape[0],1,1), t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)
         else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
             return self.p_losses_face(x, c, t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)

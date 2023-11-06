@@ -1,13 +1,13 @@
 
 # Set variables
-name="v4_reconstruct_img_train_correct_ID_ch"
+name="check"
 Results_dir="results/${name}"
 Results_out="results/${name}/results"
 Write_results="results/quantitative/P4s/${name}"
-device=1
+device=5
 
-CONFIG="configs/v4_reconstruct_img_train_correct.yaml"
-CKPT="models/Paint-by-Example/v4_reconstruct_img_train_correct_gray_add_feature/PBE/celebA/2023-10-29T23-59-03_v4_reconstruct_img_train_correct/checkpoints/last.ckpt"
+CONFIG="configs/v10_reconstruct_img_train_correct_attention_layers.yaml"
+CKPT="models/Paint-by-Example/v10_reconstruct_img_train_correct_attention_layers/PBE/celebA/2023-11-05T00-52-37_v10_reconstruct_img_train_correct_attention_layers/checkpoints/last.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -26,51 +26,50 @@ fi
 
 # Run inference
 
-# CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
-#     --plms \
-#     --outdir "${Results_dir}" \
-#     --config "${CONFIG}" \
-#     --ckpt "${CKPT}" \
-#     --scale 5 \
-#     --dataset "CelebA" 
-
-
-#     # --Start_from_target \
-#     # --target_start_noise_t 700  
+CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
+    --plms \
+    --outdir "${Results_dir}" \
+    --config "${CONFIG}" \
+    --ckpt "${CKPT}" \
+    --scale 5 \
+    --dataset "CelebA" 
+    
+    # --Start_from_target \
+    # --target_start_noise_t 800  
     
 
 
-# echo "FID score with Source:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-#     "${source_path}" \
-#     "${Results_out}"  >> "$output_filename"
+echo "FID score with Source:"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+    "${source_path}" \
+    "${Results_out}"  >> "$output_filename"
 
-# echo "FID score with Dataset:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-#     "${Dataset_path}" \
-#     "${Results_out}"  >> "$output_filename"
+echo "FID score with Dataset:"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+    "${Dataset_path}" \
+    "${Results_out}"  >> "$output_filename"
 
-# echo "Pose comarison with target:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
-#     "${target_path}" \
-#     "${Results_out}"  >> "$output_filename"
+echo "Pose comarison with target:"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
+    "${target_path}" \
+    "${Results_out}"  >> "$output_filename"
 
 echo "ID similarity with Source:"
-CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval_old.py --device cuda \
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
     "${source_path}" \
     "${Results_out}" \
     "${source_mask_path}" \
     "${target_mask_path}"  >> "$output_filename"  
 
 
-# echo "ID similarity with Target:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
-#     "${target_path}" \
-#     "${Results_out}" \
-#     "${target_mask_path}" \
-#     "${target_mask_path}"  >> "$output_filename"  
+echo "ID similarity with Target:"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+    "${target_path}" \
+    "${Results_out}" \
+    "${target_mask_path}" \
+    "${target_mask_path}"  >> "$output_filename"  
 
-# echo "ID_restoreformer"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
-#     "${Results_out}" \
-#     --gt_folder "${source_path}"   >> "$output_filename"  
+echo "ID_restoreformer"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
+    "${Results_out}" \
+    --gt_folder "${source_path}"   >> "$output_filename"  

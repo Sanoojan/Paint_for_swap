@@ -46,7 +46,7 @@ except ImportError:
         return x
 import cv2
 import albumentations as A
-
+import torch.nn as nn
 # from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
@@ -70,6 +70,73 @@ parser.add_argument('path', type=str, nargs=4,
 
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}
+
+class IDLoss(nn.Module):
+    def __init__(self,multiscale=True):
+        super(IDLoss, self).__init__()
+        print('Loading ResNet ArcFace')
+        # self.opts = opts 
+        self.multiscale = multiscale
+        self.face_pool_1 = torch.nn.AdaptiveAvgPool2d((256, 256))
+        self.facenet = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
+        # self.facenet=iresnet100(pretrained=False, fp16=False) # changed by sanoojan
+        
+        self.facenet.load_state_dict(torch.load("/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"))
+        
+        self.face_pool_2 = torch.nn.AdaptiveAvgPool2d((112, 112))
+        self.facenet.eval()
+        
+        self.set_requires_grad(False)
+            
+    def set_requires_grad(self, flag=True):
+        for p in self.parameters():
+            p.requires_grad = flag
+    
+    def extract_feats(self, x,clip_img=True):
+        # breakpoint()
+        # if clip_img:
+        #     x = un_norm_clip(x)
+        #     x = TF.normalize(x, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        x = self.face_pool_1(x)  if x.shape[2]!=256 else  x # (1) resize to 256 if needed
+        x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
+        x = self.face_pool_2(x) # (3) resize to 112 to fit pre-trained model
+        # breakpoint()
+        x_feats = self.facenet(x, multi_scale=self.multiscale )
+        
+        # x_feats = self.facenet(x) # changed by sanoojan
+        return x_feats
+
+    
+
+    def forward(self, y_hat, y,clip_img=True):
+        n_samples = y.shape[0]
+        y_feats_ms = self.extract_feats(y,clip_img=clip_img)  # Otherwise use the feature from there
+
+        y_hat_feats_ms = self.extract_feats(y_hat,clip_img=clip_img)
+        y_feats_ms = [y_f.detach() for y_f in y_feats_ms]
+        
+        loss_all = 0
+        sim_improvement_all = 0
+   
+        for y_hat_feats, y_feats in zip(y_hat_feats_ms, y_feats_ms):
+ 
+            loss = 0
+            sim_improvement = 0
+            count = 0
+            
+            for i in range(n_samples):
+                sim_target = y_hat_feats[i].dot(y_feats[i])
+                sim_views = y_feats[i].dot(y_feats[i])
+    
+                
+                loss += 1 - sim_target  # id loss
+                sim_improvement +=  float(sim_target) - float(sim_views)
+                count += 1
+            
+            loss_all += loss / count
+            sim_improvement_all += sim_improvement / count
+    
+        return loss_all, sim_improvement_all, None
 
 def get_tensor(normalize=True, toTensor=True):
     transform_list = []
@@ -163,7 +230,7 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         return image
 
 
-def compute_features(files,mask_files, model, batch_size=50, dims=2048, device='cpu',
+def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2048, device='cpu',
                     num_workers=1):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
@@ -199,7 +266,7 @@ def compute_features(files,mask_files, model, batch_size=50, dims=2048, device='
     
 
 
-    pred_arr = np.empty((len(files), 512))
+    pred_arr = np.empty((len(files), 25088))
 
     start_idx = 0
     
@@ -213,7 +280,9 @@ def compute_features(files,mask_files, model, batch_size=50, dims=2048, device='
             # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
             # x = face_pool_2(x) # (3) resize to 112 to fit pre-trained model
             # breakpoint()
-            pred = model(batch )
+            # pred = model(batch )
+            
+            pred=IDLoss_model.extract_feats(batch)[-2]
             # pred = model(batch )[0] for arcface
             
         # breakpoint()
@@ -311,7 +380,7 @@ def calculate_activation_statistics(files, model, batch_size=50, dims=2048,
     return mu, sigma
 
 
-def compute_features_wrapp(path,mask_path, model, batch_size, dims, device,
+def compute_features_wrapp(path,mask_path, model,IDLoss_model, batch_size, dims, device,
                                num_workers=1):
     if path.endswith('.npz'):
         with np.load(path) as f:
@@ -335,11 +404,12 @@ def compute_features_wrapp(path,mask_path, model, batch_size, dims, device,
         numbers =[[int(par) for par in part if par.isdigit()] for part in parts]
         
         numbers= [ num[0] for num in numbers if len(num)>0]
-        min_num= min(numbers)
-        # if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
-        numbers = [num-min_num for num in numbers] # celeb
         # breakpoint()
-        pred_arr = compute_features(files,mask_files, model, batch_size,
+        mi_num= min(numbers)
+        # if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
+        numbers = [(num - mi_num) for num in numbers] # celeb
+        # breakpoint()
+        pred_arr = compute_features(files,mask_files, model,IDLoss_model, batch_size,
                                                dims, device, num_workers)
 
     return pred_arr,numbers
@@ -368,6 +438,8 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     CosFace.eval()
     CosFace.to(device)
     
+    IDLoss_model=IDLoss().cuda()
+    
     
 
 
@@ -380,9 +452,9 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     # CosFace.to(device)
     
 
-    feat1,ori_lab = compute_features_wrapp(paths[0],paths[2], CosFace, batch_size,
+    feat1,ori_lab = compute_features_wrapp(paths[0],paths[2], CosFace,IDLoss_model, batch_size,
                                         dims, device, num_workers)
-    feat2,swap_lab = compute_features_wrapp(paths[1],paths[3], CosFace, batch_size,
+    feat2,swap_lab = compute_features_wrapp(paths[1],paths[3], CosFace,IDLoss_model, batch_size,
                                         dims, device, num_workers)
     # dot produc to get similarity
     # breakpoint()

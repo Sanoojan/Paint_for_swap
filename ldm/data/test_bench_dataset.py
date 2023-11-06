@@ -177,8 +177,8 @@ class CelebAdataset(data.Dataset):
             self.ref_labels_vis= self.ref_labels_vis[:int(len(self.labels_vis)*self.fraction)]  if self.load_vis_img else None
             # intermediate_results_261/results/000000028000.jpg
             if self.load_prior:
-                self.prior_images=sorted([osp.join("intermediate_results_261/results", "0000000%d.jpg"%idx) for idx in range(28000, 29000)])
-            
+                # self.prior_images=sorted([osp.join("intermediate_results_261/results", "0000000%d.jpg"%idx) for idx in range(28000, 29000)])
+                self.prior_images=sorted([osp.join("/home/sanoojan/e4s/Results/testbench/reenact/results", "%d.png"%idx) for idx in range(29000, 30000)])
         self.imgs= self.imgs[:int(len(self.imgs)*self.fraction)]
         self.labels= self.labels[:int(len(self.labels)*self.fraction)]
         self.labels_vis= self.labels_vis[:int(len(self.labels_vis)*self.fraction)]  if self.load_vis_img else None

@@ -403,6 +403,11 @@ def main():
                     # c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))
                     landmarks=model.get_landmarks(test_batch) if model.Landmark_cond else None
                     c=model.conditioning_with_feat(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16),landmarks=landmarks).float()
+                    if model.land_mark_id_seperate_layers and opt.scale != 1.0:
+            
+                        # concat c, landmarks
+                        landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
+                        uc=torch.cat([uc,landmarks],dim=-1)
                     
                     
                     if c.shape[-1]==1024:
