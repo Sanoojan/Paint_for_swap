@@ -45,6 +45,9 @@ model:
         use_checkpoint: True
         legacy: False
         add_conv_in_front_of_unet: False
+        sep_head_att: True #new
+        land_mark_id_seperate_layers: False #new
+        head_splits: [6,2] #new
 
     first_stage_config:
       target: ldm.models.autoencoder.AutoencoderKL
@@ -72,12 +75,15 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenCLIPImageEmbedder
       other_params:
-        clip_weight: 0.35
-        ID_weight: 0.65
+        clip_weight: 0.1
+        ID_weight: 0.9
         Landmark_cond: True
         Landmarks_weight: 0.05
         arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
         concat_feat: False
+        land_mark_id_seperate_layers: False
+        multi_scale_ID: False # True was used for the previous training there is an issue
+        sep_head_att: True
         Additional_config:
           Reconstruct_initial: True
           Reconstruct_DDIM_steps: 5

@@ -23,7 +23,7 @@ import socket
 from pytorch_lightning.plugins.environments import ClusterEnvironment,SLURMEnvironment
 
 #set cuda visible devices =3
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 
 def get_parser(**parser_kwargs):
@@ -52,8 +52,8 @@ def get_parser(**parser_kwargs):
         "--resume",
         type=str,
         const=True,
-        default="",
-        # default="models/Paint-by-Example/v4_reconstruct_img_train_correct_gray_add_feature/PBE/celebA/2023-10-29T23-59-03_v4_reconstruct_img_train_correct/checkpoints/epoch=000017.ckpt",
+        # default="",
+        default="models/Paint-by-Example/v12_reconstruct_img_train_correct_sep_head_att/PBE/celebA/2023-11-08T14-32-56_v12_reconstruct_img_train_correct_sep_head_att/checkpoints/last.ckpt",
         nargs="?",
         help="resume from logdir or checkpoint in logdir",
     )
@@ -121,7 +121,7 @@ def get_parser(**parser_kwargs):
     parser.add_argument(
         "--pretrained_model",
         type=str,
-        default="pretrained_models/sd-v1-4-modified-9channel.ckpt",
+        default="checkpoints/model.ckpt",
         help="path to pretrained model",
     )
     parser.add_argument(

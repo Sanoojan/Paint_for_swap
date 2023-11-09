@@ -1,13 +1,13 @@
 
 # Set variables
-name="check"
+name="v12_reconstruct_img_train_correct_sep_head_att"
 Results_dir="results/${name}"
 Results_out="results/${name}/results"
 Write_results="results/quantitative/P4s/${name}"
-device=5
+device=0
 
-CONFIG="configs/v10_reconstruct_img_train_correct_attention_layers.yaml"
-CKPT="models/Paint-by-Example/v10_reconstruct_img_train_correct_attention_layers/PBE/celebA/2023-11-05T00-52-37_v10_reconstruct_img_train_correct_attention_layers/checkpoints/last.ckpt"
+CONFIG="configs/v12_reconstruct_img_train_correct_sep_head_att.yaml"
+CKPT="models/Paint-by-Example/v12_reconstruct_img_train_correct_sep_head_att/PBE/celebA/2023-11-08T14-32-56_v12_reconstruct_img_train_correct_sep_head_att/checkpoints/last.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -27,7 +27,6 @@ fi
 # Run inference
 
 CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
-    --plms \
     --outdir "${Results_dir}" \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \

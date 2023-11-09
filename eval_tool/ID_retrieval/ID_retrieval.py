@@ -47,6 +47,7 @@ except ImportError:
 import cv2
 import albumentations as A
 import torch.nn as nn
+from natsort import natsorted
 # from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
@@ -266,7 +267,7 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
     
 
 
-    pred_arr = np.empty((len(files), 25088))
+    pred_arr = np.empty((len(files), 512))
 
     start_idx = 0
     
@@ -280,9 +281,9 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
             # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
             # x = face_pool_2(x) # (3) resize to 112 to fit pre-trained model
             # breakpoint()
-            # pred = model(batch )
+            pred = model(batch )
             
-            pred=IDLoss_model.extract_feats(batch)[-2]
+            # pred=IDLoss_model.extract_feats(batch)[-2]
             # pred = model(batch )[0] for arcface
             
         # breakpoint()
@@ -387,11 +388,11 @@ def compute_features_wrapp(path,mask_path, model,IDLoss_model, batch_size, dims,
             m, s = f['mu'][:], f['sigma'][:]
     else:
         path = pathlib.Path(path)
-        files = sorted([file for ext in IMAGE_EXTENSIONS
+        files = natsorted([file for ext in IMAGE_EXTENSIONS
                        for file in path.glob('*.{}'.format(ext))])
         # breakpoint()
         mask_path = pathlib.Path(mask_path)
-        mask_files = sorted([file for ext in IMAGE_EXTENSIONS
+        mask_files = natsorted([file for ext in IMAGE_EXTENSIONS
                        for file in mask_path.glob('*.{}'.format(ext))])
         # Extract all numbers before the dot using regular expression
         # breakpoint()

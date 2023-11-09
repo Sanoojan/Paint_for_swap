@@ -3,14 +3,15 @@
 # Results_out="results/v4_reconstruct_img_train_with_neck_DDIM/results"
 # Results_out="results/v4_reconstruct_img_train_correct_ID_ch/results"
 # Results_out="/home/sanoojan/other_swappers/SimSwap/output/CelebA/results"
-Results_out="/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_crop/results"
+# Results_out="/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_crop/results"
 # Results_out="results/v9_add_feat/results"
 # Results_out="results/v4_reconstruct_img_train_with_DIFT_recon_750_noise/results"/
 # Results_out="results/v4_reconstruct_img_train_with_DDIM/results"
 # Results_out="/home/sanoojan/e4s/Results/testbench/reenact/results"
-# Results_out="intermediate_renact/results_2" 
+# Results_out="intermediate_renact/results" 
+Results_out="results/v4_reconstruct_img_train_correct_id/results"
 
-
+# Results_out="results/v4_reconstruct_img_train_correct_id_from_reenact/results"
 Write_results="results/quantitative/check"
 
 # Set variables
@@ -42,7 +43,7 @@ fi
 
 # Run FID score calculation
 
-echo "FID score with Source:"
+# echo "FID score with Source:"
 # CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
 #     "${source_path}" \
 #     "${Results_out}"  >> "$output_filename"
@@ -67,16 +68,14 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --d
     # >> "$output_filename"  
 
 
-echo "ID similarity with Target:"
-CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
-    "${target_path}" \
-    "${Results_out}" \
-    "${target_mask_path}" \
-    "${target_mask_path}" 
-    
-    # >> "$output_filename"  
+# echo "ID similarity with Target:"
+# CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+#     "${target_path}" \
+#     "${Results_out}" \
+#     "${target_mask_path}" \
+#     "${target_mask_path}" >> "$output_filename"  
 
-echo "ID_restoreformer"
+# echo "ID_restoreformer"
 # CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
 #     "${Results_out}" \
 #     --gt_folder "${source_path}" >> "$output_filename"  

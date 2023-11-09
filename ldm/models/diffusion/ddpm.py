@@ -608,6 +608,11 @@ class LatentDiffusion(DDPM):
                 else:
                     self.multi_scale_ID=True  #this has an issue obtaining earlier layer from ID
                 self.land_mark_id_seperate_layers=cond_stage_config.other_params.land_mark_id_seperate_layers
+                self.sep_head_att=cond_stage_config.other_params.sep_head_att
+                if hasattr(cond_stage_config.other_params, 'normalize'):
+                    self.normalize=cond_stage_config.other_params.normalize  # normalizes the combintaion of ID and LPIPS loss
+                else:
+                    self.normalize=False
                 if self.LPIPS_loss_weight>0:
                     self.lpips_loss = LPIPS(net_type='alex').to(self.device).eval()
                 if hasattr(cond_stage_config.other_params, 'concat_feat'):
@@ -820,9 +825,14 @@ class LatentDiffusion(DDPM):
             c2=self.face_ID_model.extract_feats(x)[0]
             c2 = self.ID_proj_out(c2) #-->c:[4,768]
             c2 = c2.unsqueeze(1) #-->c:[4,1,768]
+            if self.normalize:
+            #normalize c2
+                c2 = F.normalize(c2, p=2, dim=2)
         if self.clip_weight>0:
             c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
             c = self.proj_out(c) #-->c:[4,1,768]
+            if self.normalize:
+                c=F.normalize(c, p=2, dim=2)
         if self.Landmark_cond==False:
             return (c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)   
         landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
@@ -830,7 +840,7 @@ class LatentDiffusion(DDPM):
             # concat c ,c2, landmarks
             conc=torch.cat([c,c2,landmarks],dim=-1)
             return self.concat_feat_proj(conc)
-        if self.land_mark_id_seperate_layers:
+        if self.land_mark_id_seperate_layers or self.sep_head_att:
             c=(c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)
             conc=torch.cat([c,landmarks],dim=-1)
             return conc
@@ -1253,7 +1263,7 @@ class LatentDiffusion(DDPM):
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
 
         if self.u_cond_prop<self.u_cond_percent and self.training :
-            if self.land_mark_id_seperate_layers:
+            if self.land_mark_id_seperate_layers or self.sep_head_att:
                 conc=self.learnable_vector.repeat(x.shape[0],1,1)
                 # concat c, landmarks
                 landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
@@ -1276,7 +1286,7 @@ class LatentDiffusion(DDPM):
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
 
         if self.u_cond_prop<self.u_cond_percent and self.training :
-            if self.land_mark_id_seperate_layers:
+            if self.land_mark_id_seperate_layers or self.sep_head_att:
                 conc=self.learnable_vector.repeat(x.shape[0],1,1)
                 # concat c, landmarks
                 landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks                

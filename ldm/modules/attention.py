@@ -150,15 +150,24 @@ class SpatialSelfAttention(nn.Module):
 
 
 class CrossAttention(nn.Module):
-    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.):
+    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.,sep_head_att=False):
         super().__init__()
         inner_dim = dim_head * heads
         context_dim = default(context_dim, query_dim)
 
         self.scale = dim_head ** -0.5
         self.heads = heads
-
+        self.dim_head=dim_head
         self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
+        # self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
+        # self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
+
+        head_splits=[6,2]
+        self.head_splits=head_splits
+        # if sep_head_att:
+        #     self.to_k = nn.ModuleList([nn.Linear(context_dim, dim_head*head_splits[i], bias=False) for i in range(len(head_splits))])
+        #     self.to_v = nn.ModuleList([nn.Linear(context_dim, dim_head*head_splits[i], bias=False) for i in range(len(head_splits))])
+        # else:
         self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
         self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
 
@@ -172,8 +181,27 @@ class CrossAttention(nn.Module):
 
         q = self.to_q(x)
         context = default(context, x)
-        k = self.to_k(context)
-        v = self.to_v(context)
+        if context.shape[-1]==768*2:
+            # this is for different attention heads
+            context1,context2=torch.chunk(context,2,dim=-1) # clip/id context1, landmark context2
+            k1=self.to_k(context1)
+            k2=self.to_k(context2)
+            v1=self.to_v(context1)
+            v2=self.to_v(context2)
+            
+            k=torch.cat([k1[:,:,:self.head_splits[0]*self.dim_head],k2[:,:,-self.head_splits[1]*self.dim_head:]],dim=-1)
+            v=torch.cat([v1[:,:,:self.head_splits[0]*self.dim_head],v2[:,:,-self.head_splits[1]*self.dim_head:]],dim=-1)
+            # head_splits=[6,2]
+            # k1 = self.to_k[0](context1)
+            # v1 = self.to_v[0](context1)
+            # k2 = self.to_k[1](context2)
+            # v2 = self.to_v[1](context2)
+            # k=torch.cat([k1,k2],dim=-1)
+            # v=torch.cat([v1,v2],dim=-1)
+            
+        else:
+            k = self.to_k(context)
+            v = self.to_v(context)
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 
@@ -194,12 +222,12 @@ class CrossAttention(nn.Module):
 
 
 class BasicTransformerBlock(nn.Module):
-    def __init__(self, dim, n_heads, d_head, dropout=0., context_dim=None, gated_ff=True, checkpoint=True):
+    def __init__(self, dim, n_heads, d_head, dropout=0., context_dim=None, gated_ff=True, checkpoint=True,sep_head_att=False):
         super().__init__()
-        self.attn1 = CrossAttention(query_dim=dim, heads=n_heads, dim_head=d_head, dropout=dropout)  # is a self-attention
+        self.attn1 = CrossAttention(query_dim=dim, heads=n_heads, dim_head=d_head, dropout=dropout,sep_head_att=False)  # is a self-attention
         self.ff = FeedForward(dim, dropout=dropout, glu=gated_ff)
         self.attn2 = CrossAttention(query_dim=dim, context_dim=context_dim,
-                                    heads=n_heads, dim_head=d_head, dropout=dropout)  # is self-attn if context is none
+                                    heads=n_heads, dim_head=d_head, dropout=dropout,sep_head_att=sep_head_att)  # is self-attn if context is none
         self.norm1 = nn.LayerNorm(dim)
         self.norm2 = nn.LayerNorm(dim)
         self.norm3 = nn.LayerNorm(dim)
@@ -224,7 +252,7 @@ class SpatialTransformer(nn.Module):
     Finally, reshape to image
     """
     def __init__(self, in_channels, n_heads, d_head,
-                 depth=1, dropout=0., context_dim=None):
+                 depth=1, dropout=0., context_dim=None,sep_head_att=False,head_splits=None):
         super().__init__()
         self.in_channels = in_channels
         inner_dim = n_heads * d_head
@@ -237,7 +265,7 @@ class SpatialTransformer(nn.Module):
                                  padding=0)
 
         self.transformer_blocks = nn.ModuleList(
-            [BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim)
+            [BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim,sep_head_att=sep_head_att)
                 for d in range(depth)]
         )
 
