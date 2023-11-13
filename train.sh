@@ -34,7 +34,7 @@
 # --resume ?????
 
 
-CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
+CUDA_VISIBLE_DEVICES=3 python -u main_swap.py \
 --logdir models/Paint-by-Example/v12_reconstruct_img_train_correct_sep_head_att/PBE/celebA/ \
 --pretrained_model checkpoints/model.ckpt \
 --base configs/v12_reconstruct_img_train_correct_sep_head_att.yaml \

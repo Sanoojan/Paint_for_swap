@@ -36,18 +36,13 @@ from torch.nn.functional import adaptive_avg_pool2d
 from src.Face_models.encoders.model_irse import Backbone
 # import clip
 import torchvision
-from eval_tool.ID_retrieval.iresnet50 import iresnet50,iresnet100
-from eval_tool.ID_retrieval import cosface_net as cosface
 try:
     from tqdm import tqdm
 except ImportError:
     # If tqdm is not available, provide a mock version of it
     def tqdm(x):
         return x
-import cv2
-import albumentations as A
-import torch.nn as nn
-from natsort import natsorted
+
 # from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
@@ -58,86 +53,17 @@ parser.add_argument('--num-workers', type=int,
                           'Defaults to `min(8, num_cpus)`'))
 parser.add_argument('--device', type=str, default=None,
                     help='Device to use. Like cuda, cuda:0 or cpu')
-parser.add_argument('--mask', type=bool, default=True,
-                    help='whether to use mask or not')
 # parser.add_argument('--dims', type=int, default=2048,
 #                     choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
 #                     help=('Dimensionality of Inception features to use. '
 #                           'By default, uses pool3 features'))
-parser.add_argument('path', type=str, nargs=4,
-                    default=['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results','dataset/FaceData/CelebAMask-HQ/src_mask','dataset/FaceData/CelebAMask-HQ/target_mask'],
+parser.add_argument('path', type=str, nargs=2,
+                    default=['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results'],
                     help=('Paths to the generated images or '
                           'to .npz statistic files'))
 
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}
-
-class IDLoss(nn.Module):
-    def __init__(self,multiscale=True):
-        super(IDLoss, self).__init__()
-        print('Loading ResNet ArcFace')
-        # self.opts = opts 
-        self.multiscale = multiscale
-        self.face_pool_1 = torch.nn.AdaptiveAvgPool2d((256, 256))
-        self.facenet = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
-        # self.facenet=iresnet100(pretrained=False, fp16=False) # changed by sanoojan
-        
-        self.facenet.load_state_dict(torch.load("/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"))
-        
-        self.face_pool_2 = torch.nn.AdaptiveAvgPool2d((112, 112))
-        self.facenet.eval()
-        
-        self.set_requires_grad(False)
-            
-    def set_requires_grad(self, flag=True):
-        for p in self.parameters():
-            p.requires_grad = flag
-    
-    def extract_feats(self, x,clip_img=True):
-        # breakpoint()
-        # if clip_img:
-        #     x = un_norm_clip(x)
-        #     x = TF.normalize(x, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-        x = self.face_pool_1(x)  if x.shape[2]!=256 else  x # (1) resize to 256 if needed
-        x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
-        x = self.face_pool_2(x) # (3) resize to 112 to fit pre-trained model
-        # breakpoint()
-        x_feats = self.facenet(x, multi_scale=self.multiscale )
-        
-        # x_feats = self.facenet(x) # changed by sanoojan
-        return x_feats
-
-    
-
-    def forward(self, y_hat, y,clip_img=True):
-        n_samples = y.shape[0]
-        y_feats_ms = self.extract_feats(y,clip_img=clip_img)  # Otherwise use the feature from there
-
-        y_hat_feats_ms = self.extract_feats(y_hat,clip_img=clip_img)
-        y_feats_ms = [y_f.detach() for y_f in y_feats_ms]
-        
-        loss_all = 0
-        sim_improvement_all = 0
-   
-        for y_hat_feats, y_feats in zip(y_hat_feats_ms, y_feats_ms):
- 
-            loss = 0
-            sim_improvement = 0
-            count = 0
-            
-            for i in range(n_samples):
-                sim_target = y_hat_feats[i].dot(y_feats[i])
-                sim_views = y_feats[i].dot(y_feats[i])
-    
-                
-                loss += 1 - sim_target  # id loss
-                sim_improvement +=  float(sim_target) - float(sim_views)
-                count += 1
-            
-            loss_all += loss / count
-            sim_improvement_all += sim_improvement / count
-    
-        return loss_all, sim_improvement_all, None
 
 def get_tensor(normalize=True, toTensor=True):
     transform_list = []
@@ -168,70 +94,7 @@ class ImagePathDataset(torch.utils.data.Dataset):
         return image
 
 
-class MaskedImagePathDataset(torch.utils.data.Dataset):
-    def __init__(self, files,maskfiles=None, transforms=None):
-        self.files = files
-        self.maskfiles = maskfiles  
-        self.transforms = transforms
-        self.trans=A.Compose([
-            A.Resize(height=112,width=112)])
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        # _, self.preprocess = clip.load("ViT-B/32", device=device)
-        # self.preprocess
-        # eval_transform = transforms.Compose([transforms.ToTensor(),
-        #                                  transforms.Resize(112),
-        #                                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    def __len__(self):
-        return len(self.files)
-    
-
-    def __getitem__(self, i):
-        path = self.files[i]
-        # image=Image.open(path).convert('RGB')
-        # ref_img_path = self.ref_imgs[index]
-        # print(path)
-        image=cv2.imread(str(path))
-        # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    
-        mask_path = self.maskfiles[i]
-        ref_mask_img = Image.open(mask_path).convert('L')
-        ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
-
-        # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # CelebA-HQ
-        preserve = [1,2,3,5,6,7,9]  # FFHQ or FF++
-        
-        # preserve = [1,2,4,5,8,9 ]
-        ref_mask= np.isin(ref_mask_img, preserve)
-
-        # Create a converted_mask where preserved values are set to 255
-        ref_converted_mask = np.zeros_like(ref_mask_img)
-        ref_converted_mask[ref_mask] = 255
-        ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
-        # convert to PIL image
-        
-        
-        ref_mask_img_r = ref_converted_mask.resize(image.shape[1::-1], Image.NEAREST)
-        ref_mask_img_r = np.array(ref_mask_img_r)
-        image[ref_mask_img_r==0]=0
-        
-        image=self.trans(image=image)
-        image=Image.fromarray(image["image"])
-        image=get_tensor()(image)
-        
-        
-        # ref_img=Image.fromarray(ref_img)
-        
-        # ref_img=get_tensor_clip()(ref_img)
-        image = image.unsqueeze(0)
-        
-        
-        
-        # image = get_tensor()(Image.open(path).convert('RGB').resize((112,112))).unsqueeze(0)
-        return image
-
-
-def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2048, device='cpu',
+def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
                     num_workers=1):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
@@ -257,15 +120,12 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
                'Setting batch size to data size'))
         batch_size = len(files)
 
-    dataset = MaskedImagePathDataset(files,maskfiles=mask_files, transforms=TF.ToTensor())
-    
+    dataset = ImagePathDataset(files, transforms=TF.ToTensor())
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
                                              shuffle=False,
                                              drop_last=False,
                                              num_workers=num_workers)
-    
-
 
     pred_arr = np.empty((len(files), 512))
 
@@ -275,17 +135,13 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
     face_pool_2 = torch.nn.AdaptiveAvgPool2d((112, 112))
     for batch in tqdm(dataloader):
         batch = batch.to(device).squeeze(1)
-
+        # breakpoint()
         with torch.no_grad():
             # x = face_pool_1(batch)  if batch.shape[2]!=256 else  batch # (1) resize to 256 if needed
             # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
             # x = face_pool_2(x) # (3) resize to 112 to fit pre-trained model
             # breakpoint()
-            pred = model(batch )
-            
-            # pred=IDLoss_model.extract_feats(batch)[-2]
-            # pred = model(batch )[0] for arcface
-            
+            pred = model(batch  )[0]
         # breakpoint()
         # # If model output is not scalar, apply global spatial average pooling.
         # # This happens if you choose a dimensionality not equal 2048.
@@ -293,7 +149,6 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
         #     pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
 
         # pred = pred.squeeze(3).squeeze(2).cpu().numpy()
-        # print(pred.shape)
         pred = pred.cpu().numpy()
 
         pred_arr[start_idx:start_idx + pred.shape[0]] = pred
@@ -381,19 +236,15 @@ def calculate_activation_statistics(files, model, batch_size=50, dims=2048,
     return mu, sigma
 
 
-def compute_features_wrapp(path,mask_path, model,IDLoss_model, batch_size, dims, device,
+def compute_features_wrapp(path, model, batch_size, dims, device,
                                num_workers=1):
     if path.endswith('.npz'):
         with np.load(path) as f:
             m, s = f['mu'][:], f['sigma'][:]
     else:
         path = pathlib.Path(path)
-        files = natsorted([file for ext in IMAGE_EXTENSIONS
+        files = sorted([file for ext in IMAGE_EXTENSIONS
                        for file in path.glob('*.{}'.format(ext))])
-        # breakpoint()
-        mask_path = pathlib.Path(mask_path)
-        mask_files = natsorted([file for ext in IMAGE_EXTENSIONS
-                       for file in mask_path.glob('*.{}'.format(ext))])
         # Extract all numbers before the dot using regular expression
         # breakpoint()
         pattern = r'[_\/.-]'
@@ -405,12 +256,10 @@ def compute_features_wrapp(path,mask_path, model,IDLoss_model, batch_size, dims,
         numbers =[[int(par) for par in part if par.isdigit()] for part in parts]
         
         numbers= [ num[0] for num in numbers if len(num)>0]
-        # breakpoint()
-        mi_num= min(numbers)
-        # if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
-        numbers = [(num - mi_num) for num in numbers] # celeb
-        # breakpoint()
-        pred_arr = compute_features(files,mask_files, model,IDLoss_model, batch_size,
+        if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
+            numbers = [num-29000 for num in numbers] # celeb
+        
+        pred_arr = compute_features(files, model, batch_size,
                                                dims, device, num_workers)
 
     return pred_arr,numbers
@@ -423,39 +272,19 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
             raise RuntimeError('Invalid path: %s' % p)
 
     # block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
-    
-    # cosface_state_dict = torch.load("eval_tool/Face_rec_models/backbone.pth")
-    # CosFace = iresnet50()
-    
-    # cosface_state_dict = torch.load("eval_tool/Face_rec_models/iresnet100_cosface/backbone.pth")
-    # CosFace = iresnet100()
-    
-    
-    cosface_state_dict = torch.load('/home/sanoojan/Paint_for_swap/eval_tool/Face_rec_models/cosface/net_sphere20_data_vggface2_acc_9955.pth')
-    CosFace = cosface.sphere().cuda()
-    
-    
-    CosFace.load_state_dict(cosface_state_dict)
+
+    # model = InceptionV3([block_idx]).to(device)
+    CosFace  = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
+    path="/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
+    # CosFace.load_state_dict(torch.load('eval_tool/Face_rec_models/backbone.pth'))
+    CosFace.load_state_dict(torch.load(path))
     CosFace.eval()
     CosFace.to(device)
     
-    IDLoss_model=IDLoss().cuda()
-    
-    
 
-
-    # # model = InceptionV3([block_idx]).to(device)
-    # CosFace  = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
-    # path="/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
-    # # CosFace.load_state_dict(torch.load('eval_tool/Face_rec_models/backbone.pth'))
-    # CosFace.load_state_dict(torch.load(path))
-    # CosFace.eval()
-    # CosFace.to(device)
-    
-
-    feat1,ori_lab = compute_features_wrapp(paths[0],paths[2], CosFace,IDLoss_model, batch_size,
+    feat1,ori_lab = compute_features_wrapp(paths[0], CosFace, batch_size,
                                         dims, device, num_workers)
-    feat2,swap_lab = compute_features_wrapp(paths[1],paths[3], CosFace,IDLoss_model, batch_size,
+    feat2,swap_lab = compute_features_wrapp(paths[1], CosFace, batch_size,
                                         dims, device, num_workers)
     # dot produc to get similarity
     # breakpoint()
@@ -470,19 +299,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     # breakpoint()
     # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
     feat_sel=feat1[swap_lab]
-    feat_sel=feat_sel/np.linalg.norm(feat_sel,axis=1,keepdims=True)
-    feat2=feat2/np.linalg.norm(feat2,axis=1,keepdims=True)
-    similarities=np.diagonal(np.dot(feat_sel,feat2.T))
-    #print from highest to lowest with index
-    
-    
-    
-    order=np.argsort(similarities)[::-1]
-    value=np.sort(similarities)[::-1]
-    # breakpoint()
-    
-    Mean_dot_prod= np.mean(similarities)
-    
+    Mean_dot_prod= np.mean(np.diagonal(np.dot(feat_sel,feat2.T)))
 
     # breakpoint()
     return top1,top5,Mean_dot_prod
