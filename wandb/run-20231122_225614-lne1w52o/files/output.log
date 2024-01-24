@@ -1,0 +1,28 @@
+
+LatentDiffusion: Running in eps-prediction mode
+DiffusionWrapper has 859.54 M params.
+Loading ResNet ArcFace
+Traceback (most recent call last):
+  File "main_swap.py", line 513, in <module>
+    # model
+  File "/home/sanoojan/Paint_for_swap/ldm/util.py", line 85, in instantiate_from_config
+    return get_obj_from_str(config["target"])(**config.get("params", dict()))
+  File "/home/sanoojan/Paint_for_swap/ldm/models/diffusion/ddpm.py", line 644, in __init__
+    self.instantiate_IDLoss(cond_stage_config)
+  File "/home/sanoojan/Paint_for_swap/ldm/models/diffusion/ddpm.py", line 725, in instantiate_IDLoss
+    model = IDLoss(config,multiscale=self.multi_scale_ID)
+  File "/home/sanoojan/Paint_for_swap/ldm/models/diffusion/ddpm.py", line 89, in __init__
+    self.facenet.load_state_dict(torch.load(opts.other_params.arcface_path))
+  File "/share/softwares/anaconda/anaconda3/envs/paint2/lib/python3.8/site-packages/torch/serialization.py", line 713, in load
+    return _legacy_load(opened_file, map_location, pickle_module, **pickle_load_args)
+  File "/share/softwares/anaconda/anaconda3/envs/paint2/lib/python3.8/site-packages/torch/serialization.py", line 930, in _legacy_load
+    result = unpickler.load()
+  File "/share/softwares/anaconda/anaconda3/envs/paint2/lib/python3.8/site-packages/torch/serialization.py", line 876, in persistent_load
+    wrap_storage=restore_location(obj, location),
+  File "/share/softwares/anaconda/anaconda3/envs/paint2/lib/python3.8/site-packages/torch/serialization.py", line 176, in default_restore_location
+    result = fn(storage, location)
+  File "/share/softwares/anaconda/anaconda3/envs/paint2/lib/python3.8/site-packages/torch/serialization.py", line 156, in _cuda_deserialize
+    return storage_type(obj.nbytes())
+  File "/share/softwares/anaconda/anaconda3/envs/paint2/lib/python3.8/site-packages/torch/cuda/__init__.py", line 661, in _lazy_new
+    return super(_CudaBase, cls).__new__(cls, *args, **kwargs)
+KeyboardInterrupt

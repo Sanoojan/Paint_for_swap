@@ -48,10 +48,11 @@ import cv2
 import albumentations as A
 import torch.nn as nn
 from natsort import natsorted
+import shutil
 # from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument('--batch-size', type=int, default=1,
+parser.add_argument('--batch-size', type=int, default=20,
                     help='Batch size to use')
 parser.add_argument('--num-workers', type=int,
                     help=('Number of processes to use for data loading. '
@@ -69,7 +70,6 @@ parser.add_argument('path', type=str, nargs=4,
                     help=('Paths to the generated images or '
                           'to .npz statistic files'))
 
-parser.add_argument('--print_sim', type=bool, default=False,)
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}
 
@@ -195,26 +195,26 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-        mask_path = self.maskfiles[i]
-        ref_mask_img = Image.open(mask_path).convert('L')
-        ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
+        # mask_path = self.maskfiles[i]
+        # ref_mask_img = Image.open(mask_path).convert('L')
+        # ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
 
-        preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # CelebA-HQ
-        # preserve = [1,2,3,5,6,7,9]  # FFHQ or FF++
+        # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # CelebA-HQ
+        preserve = [1,2,3,5,6,7,9]  # FFHQ or FF++
         
         # preserve = [1,2,4,5,8,9 ]
-        ref_mask= np.isin(ref_mask_img, preserve)
+        # ref_mask= np.isin(ref_mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255
-        ref_converted_mask = np.zeros_like(ref_mask_img)
-        ref_converted_mask[ref_mask] = 255
-        ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
+        # ref_converted_mask = np.zeros_like(ref_mask_img)
+        # ref_converted_mask[ref_mask] = 255
+        # ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
         # convert to PIL image
         
         
-        ref_mask_img_r = ref_converted_mask.resize(image.shape[1::-1], Image.NEAREST)
-        ref_mask_img_r = np.array(ref_mask_img_r)
-        image[ref_mask_img_r==0]=0
+        # ref_mask_img_r = ref_converted_mask.resize(image.shape[1::-1], Image.NEAREST)
+        # ref_mask_img_r = np.array(ref_mask_img_r)
+        # image[ref_mask_img_r==0]=0
         
         image=self.trans(image=image)
         image=Image.fromarray(image["image"])
@@ -284,7 +284,7 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
             # breakpoint()
             pred = model(batch )
             
-            # pred=IDLoss_model.extract_feats(batch)[-1]
+            # pred=IDLoss_model.extract_feats(batch)[-2]
             # pred = model(batch )[0] for arcface
             
         # breakpoint()
@@ -303,6 +303,83 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
 
     return pred_arr
 
+
+def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
+    """Numpy implementation of the Frechet Distance.
+    The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
+    and X_2 ~ N(mu_2, C_2) is
+            d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
+    Stable version by Dougal J. Sutherland.
+    Params:
+    -- mu1   : Numpy array containing the activations of a layer of the
+               inception net (like returned by the function 'get_predictions')
+               for generated samples.
+    -- mu2   : The sample mean over activations, precalculated on an
+               representative data set.
+    -- sigma1: The covariance matrix over activations for generated samples.
+    -- sigma2: The covariance matrix over activations, precalculated on an
+               representative data set.
+    Returns:
+    --   : The Frechet Distance.
+    """
+
+    mu1 = np.atleast_1d(mu1)
+    mu2 = np.atleast_1d(mu2)
+
+    sigma1 = np.atleast_2d(sigma1)
+    sigma2 = np.atleast_2d(sigma2)
+
+    assert mu1.shape == mu2.shape, \
+        'Training and test mean vectors have different lengths'
+    assert sigma1.shape == sigma2.shape, \
+        'Training and test covariances have different dimensions'
+
+    diff = mu1 - mu2
+
+    # Product might be almost singular
+    covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
+    if not np.isfinite(covmean).all():
+        msg = ('fid calculation produces singular product; '
+               'adding %s to diagonal of cov estimates') % eps
+        print(msg)
+        offset = np.eye(sigma1.shape[0]) * eps
+        covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+
+    # Numerical error might give slight imaginary component
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError('Imaginary component {}'.format(m))
+        covmean = covmean.real
+
+    tr_covmean = np.trace(covmean)
+
+    return (diff.dot(diff) + np.trace(sigma1)
+            + np.trace(sigma2) - 2 * tr_covmean)
+
+
+def calculate_activation_statistics(files, model, batch_size=50, dims=2048,
+                                    device='cpu', num_workers=1):
+    """Calculation of the statistics used by the FID.
+    Params:
+    -- files       : List of image files paths
+    -- model       : Instance of inception model
+    -- batch_size  : The images numpy array is split into batches with
+                     batch size batch_size. A reasonable batch size
+                     depends on the hardware.
+    -- dims        : Dimensionality of features returned by Inception
+    -- device      : Device to run calculations
+    -- num_workers : Number of parallel dataloader workers
+    Returns:
+    -- mu    : The mean over samples of the activations of the pool_3 layer of
+               the inception model.
+    -- sigma : The covariance matrix of the activations of the pool_3 layer of
+               the inception model.
+    """
+    act = get_activations(files, model, batch_size, dims, device, num_workers)
+    mu = np.mean(act, axis=0)
+    sigma = np.cov(act, rowvar=False)
+    return mu, sigma
 
 
 def compute_features_wrapp(path,mask_path, model,IDLoss_model, batch_size, dims, device,
@@ -397,7 +474,6 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     feat_sel=feat_sel/np.linalg.norm(feat_sel,axis=1,keepdims=True)
     feat2=feat2/np.linalg.norm(feat2,axis=1,keepdims=True)
     similarities=np.diagonal(np.dot(feat_sel,feat2.T))
-    
     #print from highest to lowest with index
     
     
@@ -408,9 +484,26 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     
     Mean_dot_prod= np.mean(similarities)
     
+    
+    feat1=feat1/np.linalg.norm(feat1,axis=1,keepdims=True)
+    all_similarities=np.dot(feat1,feat2.T)
+    sim_order=np.argsort(all_similarities,axis=0)
+    # reverse order
+    sim_order=np.flip(sim_order,axis=0)
 
+    save_path="Eval_image_Folder"
+    im_path=paths[0]
+    image_indices=np.argmax(all_similarities,axis=0)
     # breakpoint()
-    return top1,top5,Mean_dot_prod,similarities
+    print(np.max(all_similarities,axis=0))
+    for ind in image_indices:
+        # breakpoint()
+        img_path=os.path.join(im_path,natsorted(os.listdir(im_path))[ind])
+        # copy this image to save_path
+        shutil.copy(img_path,save_path)
+    
+    # breakpoint()
+    return top1,top5,Mean_dot_prod
 
 
 def main():
@@ -427,21 +520,14 @@ def main():
     else:
         num_workers = args.num_workers
 
-    top1,top5,Mean_dot_prod,similarities= calculate_id_given_paths(args.path,
+    top1,top5,Mean_dot_prod= calculate_id_given_paths(args.path,
                                           args.batch_size,
                                           device,
                                           2048,
                                           num_workers)
-    
-    
     print('Top-1 accuracy: {:.2f}%'.format(top1 * 100))
     print('Top-5 accuracy: {:.2f}%'.format(top5 * 100))
     print('Mean ID feat:  {:.2f}'.format(Mean_dot_prod))
-    
-    if args.print_sim:
-        print('Similarities: \n ')
-        for i in range(len(similarities)):
-            print(i,":",similarities[i])
 
 if __name__ == '__main__':
     main()

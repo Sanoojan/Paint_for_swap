@@ -228,43 +228,77 @@ def main():
     faceParsing_model = init_faceParsing_pretrained_model(opt.faceParser_name, opt.faceParsing_ckpt, opt.segnext_config)
         
 
-    Image_path='dataset/FaceData/FF++/faceforensics_benchmark_images'
-    mask_path='dataset/FaceData/FF++/src_mask'
-    save_path='dataset/FaceData/FF++/Val'
+    Image_path='dataset/FaceData/CelebAMask-HQ/Val'
+    mask_real_path='dataset/FaceData/CelebAMask-HQ/src_mask'
+    mask_path='dataset/FaceData/CelebAMask-HQ/Val_cropped_mask'
+    save_path='dataset/FaceData/CelebAMask-HQ/Val_cropped'
+    
+    if not os.path.exists(mask_path):
+        os.makedirs(mask_path)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
     # get image list
     image_list = glob.glob(os.path.join(Image_path, '*.png'))
 
-    for i in tqdm(range(500,1000)):
+    for i in tqdm(range(29000,30000)):
         try:
-            frame = cv2.imread(Image_path+ "/" +str(i).zfill(4)+ '.png')
+            image_path_name=Image_path+ "/" +str(i)+ '.jpg'
+            save_path_name=save_path+ "/" +str(i)+ '.jpg'
+            mask_path_name=mask_path+ "/" +str(i)+ '.png'
+            mask_real_path_name=mask_real_path+ "/" +str(i)+ '.png'
+            frame = cv2.imread(image_path_name)
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # Image.fromarray(frame).save(os.path.join(Image_path, f'{i}.png'))
             # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            crops, orig_images, quads, inv_transforms = crop_and_align_face([os.path.join(save_path, str(i).zfill(4)+ '.png')])
+            crops, orig_images, quads, inv_transforms = crop_and_align_face([image_path_name])
             crops = [crop.convert("RGB") for crop in crops]
             T = crops[0]
-            
             # inv_transforms_all.append(inv_transforms[0])
-            T.save(os.path.join(save_path,  str(i).zfill(4)+ '.png'))
+            T.save(save_path_name)
             
-            pil_im = T.resize((1024,1024), Image.BILINEAR)
-            mask = faceParsing_demo(faceParsing_model, pil_im, convert_to_seg12=opt.seg12, model_name=opt.faceParser_name)
-            
-            Image.fromarray(mask).save(os.path.join(mask_path, str(i).zfill(4)+ '.png'))
-            # save T
-            T.save(os.path.join(save_path,  str(i).zfill(4)+ '.png'))
+            real_mask = cv2.imread(mask_real_path_name)
+            if real_mask is None:
+                pil_im = T.resize((1024,1024), Image.BILINEAR)
+                mask = faceParsing_demo(faceParsing_model, pil_im, convert_to_seg12=opt.seg12, model_name=opt.faceParser_name)
+                
+                Image.fromarray(mask).save(mask_path_name)
+                # save T
+                
+            else:
+                
+                real_mask = Image.fromarray(real_mask)
+                real_mask=real_mask.resize((1024,1024), Image.BILINEAR)
+                #crop using quads
+                real_mask = real_mask.crop((quads[0][0][0], quads[0][0][1], quads[0][2][0], quads[0][2][1]))
+                
+                real_mask=real_mask.resize((512,512), Image.BILINEAR)
+                real_mask.save(mask_path_name)
+                # save T
+           
         except:
             print("error")
-            crops = [crop.convert("RGB") for crop in crops]
-            T = crops[0]
+            # read image as pil
+            T = Image.open(image_path_name)
             # inv_transforms_all.append(inv_transforms[0])
-
-            pil_im = T.resize((1024,1024), Image.BILINEAR)
-            mask = faceParsing_demo(faceParsing_model, pil_im, convert_to_seg12=opt.seg12, model_name=opt.faceParser_name)
-            Image.fromarray(mask).save(os.path.join(mask_path, str(i).zfill(4)+ '.png'))
-            # save T
-            T.save(os.path.join(save_path,  str(i).zfill(4)+ '.png'))
-            
-            continue
+            real_mask = cv2.imread(mask_real_path_name)
+            T.save(save_path_name)
+            if real_mask is None:
+                pil_im = T.resize((1024,1024), Image.BILINEAR)
+                mask = faceParsing_demo(faceParsing_model, pil_im, convert_to_seg12=opt.seg12, model_name=opt.faceParser_name)
+                
+                Image.fromarray(mask).save(mask_path_name)
+                # save T
+                
+            else:
+                
+                real_mask = Image.fromarray(real_mask)
+                real_mask=real_mask.resize((1024,1024), Image.BILINEAR)
+                #crop using quads
+                real_mask = real_mask.crop((quads[0][0][0], quads[0][0][1], quads[0][2][0], quads[0][2][1]))
+                
+                real_mask=real_mask.resize((512,512), Image.BILINEAR)
+                real_mask.save(mask_path_name)
+                
+            # continue
 if __name__ == "__main__":
     main()

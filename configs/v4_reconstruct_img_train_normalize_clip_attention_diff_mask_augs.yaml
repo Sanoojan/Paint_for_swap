@@ -78,10 +78,10 @@ model:
         Landmarks_weight: 0.05
         arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
         concat_feat: False
-        land_mark_id_seperate_layers: True
+        land_mark_id_seperate_layers: False
         multi_scale_ID: False # True was used for the previous training there is an issue
-        sep_head_att: False
-        normalize: True
+        sep_head_att: True
+        normalize: False
         Additional_config:
           Reconstruct_initial: False
           Reconstruct_DDIM_steps: 5

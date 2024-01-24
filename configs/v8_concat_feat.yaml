@@ -72,18 +72,23 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenCLIPImageEmbedder
       other_params:
-        clip_weight: 0.5
-        ID_weight: 0.5
+        clip_weight: 1.0
+        ID_weight: 10
         Landmark_cond: True
         Landmarks_weight: 0.05
         arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
         concat_feat: True
+        land_mark_id_seperate_layers: False
+        multi_scale_ID: True # True was used for the previous training there is an issue
+        sep_head_att: False
         Additional_config:
-          Reconstruct_initial: False
-          Reconstruct_DDIM_steps: 5
+          Reconstruct_initial: True
+          Reconstruct_DDIM_steps: 1
           ID_loss_weight: 0.3
-          LPIPS_loss_weight: 0.1
+          LPIPS_loss_weight: 0.0
           Landmark_loss_weight: 0
+        
+        
         
 
 # data:
@@ -126,7 +131,7 @@ data:
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
-              gray_outer_mask: False
+              gray_outer_mask: True
               preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
 
       validation:
@@ -137,7 +142,7 @@ data:
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
-              gray_outer_mask: False
+              gray_outer_mask: True
               preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
       test:
           target: ldm.data.celebA.CelebAdataset
@@ -146,9 +151,8 @@ data:
               dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
-              gray_outer_mask: False
-              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12 ]
-
+              gray_outer_mask: True
+              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
 # lightning:
 #   trainer:
 #     max_epochs: 40
@@ -158,7 +162,7 @@ data:
 
 lightning:
   trainer:
-    max_epochs: 20
+    max_epochs: 30
     num_nodes: 1
     accelerator: 'gpu'
     gpus: "0,1"

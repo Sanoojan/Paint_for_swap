@@ -1,13 +1,13 @@
 
 # Set variables
-name="v4_reconstruct_img_train_correct_normalize"
-Results_dir="results/${name}"
-Results_out="results/${name}/results"
-Write_results="results/quantitative/P4s/${name}"
-device=0
+name="v4_reconstruct_img_train_4_step_multi_false-ep49"
+Results_dir="results_new/${name}"
+Results_out="results_new/${name}/results"
+Write_results="Quantitative_new/P4s/${name}"
+device=5
 
-CONFIG="configs/v4_reconstruct_img_train_correct_normalize.yaml"
-CKPT="models/Paint-by-Example/configs/v4_reconstruct_img_train_correct_normalize/PBE/celebA/2023-11-10T14-20-43_v4_reconstruct_img_train_correct_normalize/checkpoints/last.ckpt"
+CONFIG="models/Paint-by-Example/v4_reconstruct_img_train_4_step_multi_false_with_LPIPS/PBE/celebA/2024-01-02T07-50-43_v4_reconstruct_img_train_4_step_multi_false/configs/2024-01-02T07-50-43-project.yaml"
+CKPT="models/Paint-by-Example/v4_reconstruct_img_train_4_step_multi_false_with_LPIPS/PBE/celebA/2024-01-02T07-50-43_v4_reconstruct_img_train_4_step_multi_false/checkpoints/epoch=000049.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -32,7 +32,7 @@ CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --ckpt "${CKPT}" \
     --scale 5 \
     --dataset "CelebA" 
-    
+
     # --Start_from_target \
     # --target_start_noise_t 800  
     
@@ -53,13 +53,6 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cu
     "${target_path}" \
     "${Results_out}"  >> "$output_filename"
 
-echo "ID similarity with Source:"
-CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
-    "${source_path}" \
-    "${Results_out}" \
-    "${source_mask_path}" \
-    "${target_mask_path}"  >> "$output_filename"  
-
 
 echo "ID similarity with Target:"
 CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
@@ -72,3 +65,11 @@ echo "ID_restoreformer"
 CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
     "${Results_out}" \
     --gt_folder "${source_path}"   >> "$output_filename"  
+
+echo "ID similarity with Source:"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+    "${source_path}" \
+    "${Results_out}" \
+    "${source_mask_path}" \
+    "${target_mask_path}"  \
+    --print_sim True  >> "$output_filename"  

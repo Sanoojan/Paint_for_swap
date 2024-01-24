@@ -33,7 +33,7 @@ from torch.autograd import Variable
 from src.Face_models.encoders.model_irse import Backbone
 import dlib
 from eval_tool.lpips.lpips import LPIPS
-
+import wandb
 from PIL import Image
 
 
@@ -619,7 +619,15 @@ class LatentDiffusion(DDPM):
                     self.concat_feat=cond_stage_config.other_params.concat_feat
                 else:
                     self.concat_feat=False
-                    
+                if hasattr(cond_stage_config.other_params, 'weight_division'):
+                    self.weight_division=cond_stage_config.other_params.weight_division
+                else:
+                    self.weight_division=True
+                if hasattr(cond_stage_config.other_params, 'partial_training'):
+                    self.partial_training=cond_stage_config.other_params.partial_training
+                    self.trainable_keys=cond_stage_config.other_params.trainable_keys
+                else:
+                    self.partial_training=False
                 if self.concat_feat:
                     self.concat_feat_proj=nn.Linear(768*2+136, 768)
                     # self.concat_feat_proj_out=nn.Linear(768, 768)
@@ -820,32 +828,40 @@ class LatentDiffusion(DDPM):
                     
         
         
-        
+        if self.clip_weight>0:
+            c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
+            c = self.proj_out(c) #-->c:[4,1,768]
+            if self.normalize:
+                norm_coeff=c.norm(dim=2, keepdim=True)
         if self.ID_weight>0:
             c2=self.face_ID_model.extract_feats(x)[0]
             c2 = self.ID_proj_out(c2) #-->c:[4,768]
             c2 = c2.unsqueeze(1) #-->c:[4,1,768]
             if self.normalize:
             #normalize c2
-                c2 = F.normalize(c2, p=2, dim=2)
-        if self.clip_weight>0:
-            c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
-            c = self.proj_out(c) #-->c:[4,1,768]
-            if self.normalize:
-                c=F.normalize(c, p=2, dim=2)
+                c2 = c2*norm_coeff/F.normalize(c2, p=2, dim=2)
+        
         if self.Landmark_cond==False:
-            return (c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)   
+            if self.weight_division:
+                return (c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight) 
+            else:
+                return c*self.clip_weight+c2*self.ID_weight  
         landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
         if self.concat_feat:
             # concat c ,c2, landmarks
             conc=torch.cat([c,c2,landmarks],dim=-1)
             return self.concat_feat_proj(conc)
         if self.land_mark_id_seperate_layers or self.sep_head_att:
-            c=(c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)
+            if self.weight_division:
+                c=(c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)
+            else:
+                c=c*self.clip_weight+c2*self.ID_weight
             conc=torch.cat([c,landmarks],dim=-1)
             return conc
-        
-        c=(c*self.clip_weight+c2*self.ID_weight+landmarks *self.Landmarks_weight)/(self.clip_weight+self.ID_weight+self.Landmarks_weight)
+        if self.weight_division:
+            c=(c*self.clip_weight+c2*self.ID_weight+landmarks *self.Landmarks_weight)/(self.clip_weight+self.ID_weight+self.Landmarks_weight)
+        else:
+            c=c*self.clip_weight+c2*self.ID_weight+landmarks *self.Landmarks_weight
         # c = c.float()
         
 
@@ -1466,7 +1482,7 @@ class LatentDiffusion(DDPM):
         loss_dict.update({f'{prefix}/loss_vlb': loss_vlb})
         loss += (self.original_elbo_weight * loss_vlb)
         loss_dict.update({f'{prefix}/loss': loss})
-
+        wandb.log(loss_dict)
         return loss, loss_dict
     
     def p_losses_face(self, x_start, cond, t, reference=None,noise=None,GT_tar=None,landmarks=None):
@@ -1598,9 +1614,10 @@ class LatentDiffusion(DDPM):
         loss_vlb = (self.lvlb_weights[t] * loss_vlb).mean()
         loss_dict.update({f'{prefix}/loss_vlb': loss_vlb})
         loss += (self.original_elbo_weight * loss_vlb)
-        loss_dict.update({f'{prefix}/loss': loss})
-
         loss+=self.ID_loss_weight*ID_loss+self.LPIPS_loss_weight*loss_lpips+self.Landmark_loss_weight*loss_landmark
+        loss_dict.update({f'{prefix}/loss': loss})
+        wandb.log(loss_dict)
+        
         return loss, loss_dict
 
 
@@ -1942,8 +1959,23 @@ class LatentDiffusion(DDPM):
     def configure_optimizers(self):
         lr = self.learning_rate
         params = list(self.model.parameters())
-
-
+        
+        if self.partial_training:
+        # if True:
+            print("Partial training.............................")
+            train_names=self.trainable_keys
+            train_names=[ 'attn2','norm2']
+            params_train=[]
+            for name,param in self.model.named_parameters():
+                if "diffusion_model" not in name and param.requires_grad:
+                    print(name)
+                    params_train.append(param)
+                    
+                elif "diffusion_model" in name and any(train_name in name for train_name in train_names):
+                    print(name)
+                    params_train.append(param)
+            params=params_train
+        print("Setting up Adam optimizer.......................")
 
         if self.cond_stage_trainable:
             print(f"{self.__class__.__name__}: Also optimizing conditioner params!")

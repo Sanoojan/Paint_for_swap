@@ -1,0 +1,27 @@
+2023-11-22 22:56:14,037 INFO    MainThread:1988571 [wandb_setup.py:_flush():76] Current SDK version is 0.16.0
+2023-11-22 22:56:14,038 INFO    MainThread:1988571 [wandb_setup.py:_flush():76] Configure stats pid to 1988571
+2023-11-22 22:56:14,038 INFO    MainThread:1988571 [wandb_setup.py:_flush():76] Loading settings from /home/sanoojan/.config/wandb/settings
+2023-11-22 22:56:14,038 INFO    MainThread:1988571 [wandb_setup.py:_flush():76] Loading settings from /home/sanoojan/Paint_for_swap/wandb/settings
+2023-11-22 22:56:14,038 INFO    MainThread:1988571 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2023-11-22 22:56:14,038 INFO    MainThread:1988571 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': False}
+2023-11-22 22:56:14,038 INFO    MainThread:1988571 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'main_swap.py', 'program_abspath': '/home/sanoojan/Paint_for_swap/main_swap.py', 'program': 'main_swap.py'}
+2023-11-22 22:56:14,038 INFO    MainThread:1988571 [wandb_init.py:_log_setup():524] Logging user logs to /home/sanoojan/Paint_for_swap/wandb/run-20231122_225614-lne1w52o/logs/debug.log
+2023-11-22 22:56:14,039 INFO    MainThread:1988571 [wandb_init.py:_log_setup():525] Logging internal logs to /home/sanoojan/Paint_for_swap/wandb/run-20231122_225614-lne1w52o/logs/debug-internal.log
+2023-11-22 22:56:14,039 INFO    MainThread:1988571 [wandb_init.py:init():564] calling init triggers
+2023-11-22 22:56:14,039 INFO    MainThread:1988571 [wandb_init.py:init():571] wandb.init called with sweep_config: {}
+config: {'name': '', 'resume': '', 'base': ['configs/v4_reconstruct_img_train_correct.yaml'], 'train': True, 'no_test': False, 'project': None, 'debug': False, 'seed': 23, 'postfix': '', 'logdir': 'models/Paint-by-Example/v4_reconstruct_img_train_correct_no_lpips_0.9ID/PBE/celebA/', 'pretrained_model': 'checkpoints/model.ckpt', 'scale_lr': False, 'train_from_scratch': False, 'logger': True, 'checkpoint_callback': True, 'default_root_dir': None, 'gradient_clip_val': 0.0, 'gradient_clip_algorithm': 'norm', 'process_position': 0, 'num_nodes': 1, 'num_processes': 1, 'devices': None, 'gpus': None, 'auto_select_gpus': False, 'tpu_cores': None, 'ipus': None, 'log_gpu_memory': None, 'progress_bar_refresh_rate': None, 'overfit_batches': 0.0, 'track_grad_norm': -1, 'check_val_every_n_epoch': 1, 'fast_dev_run': False, 'accumulate_grad_batches': 1, 'max_epochs': None, 'min_epochs': None, 'max_steps': None, 'min_steps': None, 'max_time': None, 'limit_train_batches': 1.0, 'limit_val_batches': 1.0, 'limit_test_batches': 1.0, 'limit_predict_batches': 1.0, 'val_check_interval': 1.0, 'flush_logs_every_n_steps': 100, 'log_every_n_steps': 50, 'accelerator': None, 'sync_batchnorm': False, 'precision': 32, 'weights_summary': 'top', 'weights_save_path': None, 'num_sanity_val_steps': 2, 'truncated_bptt_steps': None, 'resume_from_checkpoint': None, 'profiler': None, 'benchmark': False, 'deterministic': False, 'reload_dataloaders_every_n_epochs': 0, 'reload_dataloaders_every_epoch': False, 'auto_lr_find': False, 'replace_sampler_ddp': True, 'terminate_on_nan': False, 'auto_scale_batch_size': False, 'prepare_data_per_node': True, 'plugins': None, 'amp_backend': 'native', 'amp_level': 'O2', 'distributed_backend': None, 'move_metrics_to_cpu': False, 'multiple_trainloader_mode': 'max_size_cycle', 'stochastic_weight_avg': False}
+2023-11-22 22:56:14,039 INFO    MainThread:1988571 [wandb_init.py:init():614] starting backend
+2023-11-22 22:56:14,039 INFO    MainThread:1988571 [wandb_init.py:init():618] setting up manager
+2023-11-22 22:56:14,042 INFO    MainThread:1988571 [backend.py:_multiprocessing_setup():105] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2023-11-22 22:56:14,044 INFO    MainThread:1988571 [wandb_init.py:init():624] backend started and connected
+2023-11-22 22:56:14,052 INFO    MainThread:1988571 [wandb_init.py:init():716] updated telemetry
+2023-11-22 22:56:14,081 INFO    MainThread:1988571 [wandb_init.py:init():749] communicating run to backend with 90.0 second timeout
+2023-11-22 22:56:14,859 INFO    MainThread:1988571 [wandb_run.py:_on_init():2254] communicating current version
+2023-11-22 22:56:14,947 INFO    MainThread:1988571 [wandb_run.py:_on_init():2263] got version response 
+2023-11-22 22:56:14,948 INFO    MainThread:1988571 [wandb_init.py:init():800] starting run threads in backend
+2023-11-22 22:56:24,813 INFO    MainThread:1988571 [wandb_run.py:_console_start():2233] atexit reg
+2023-11-22 22:56:24,814 INFO    MainThread:1988571 [wandb_run.py:_redirect():2088] redirect: wrap_raw
+2023-11-22 22:56:24,814 INFO    MainThread:1988571 [wandb_run.py:_redirect():2153] Wrapping output streams.
+2023-11-22 22:56:24,814 INFO    MainThread:1988571 [wandb_run.py:_redirect():2178] Redirects installed.
+2023-11-22 22:56:24,816 INFO    MainThread:1988571 [wandb_init.py:init():841] run started, returning control to user process
+2023-11-22 22:56:51,618 WARNING MsgRouterThr:1988571 [router.py:message_loop():77] message_loop has been closed
