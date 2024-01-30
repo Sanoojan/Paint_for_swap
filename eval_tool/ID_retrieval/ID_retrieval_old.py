@@ -63,7 +63,7 @@ parser.add_argument('--mask', type=bool, default=True,
 #                     help=('Dimensionality of Inception features to use. '
 #                           'By default, uses pool3 features'))
 parser.add_argument('path', type=str, nargs=4,
-                    default=['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results','dataset/FaceData/CelebAMask-HQ/src_mask','dataset/FaceData/CelebAMask-HQ/target_mask'],
+                    default=['dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results','dataset/FaceData/CelebAMask-HQ/src_mask','dataset/FaceData/CelebAMask-HQ/target_mask'],
                     help=('Paths to the generated images or '
                           'to .npz statistic files'))
 
@@ -359,7 +359,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
 
     # # model = InceptionV3([block_idx]).to(device)
     # CosFace  = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
-    # path="/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
+    # path="Other_dependencies/arcface/model_ir_se50.pth"
     # # CosFace.load_state_dict(torch.load('eval_tool/Face_rec_models/backbone.pth'))
     # CosFace.load_state_dict(torch.load(path))
     # CosFace.eval()

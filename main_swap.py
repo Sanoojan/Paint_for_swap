@@ -21,9 +21,8 @@ from ldm.data.base import Txt2ImgIterableBaseDataset
 from ldm.util import instantiate_from_config
 import socket
 from pytorch_lightning.plugins.environments import ClusterEnvironment,SLURMEnvironment
+import wandb
 
-#set cuda visible devices =3
-# os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 
 def get_parser(**parser_kwargs):
@@ -84,10 +83,19 @@ def get_parser(**parser_kwargs):
         help="disable test",
     )
     parser.add_argument(
+        "--train_cross_attn_only",
+        type=str2bool,
+        const=True,
+        default=False,
+        nargs="?",
+        help="train cross attn only",
+    )
+    parser.add_argument(
         "-p",
         "--project",
         help="name of new or path to existing project"
     )
+    
     parser.add_argument(
         "-d",
         "--debug",
@@ -444,6 +452,12 @@ if __name__ == "__main__":
     parser = Trainer.add_argparse_args(parser)
 
     opt, unknown = parser.parse_known_args()
+    
+    if opt.debug:
+        # set cuda visible devices =3
+        os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+        
+    
     if opt.name and opt.resume:
         raise ValueError(
             "-n/--name and -r/--resume cannot be specified both."
@@ -506,6 +520,13 @@ if __name__ == "__main__":
         cpu = False
     trainer_opt = argparse.Namespace(**trainer_config)
     lightning_config.trainer = trainer_config
+    resume=True if opt.resume else False
+    if opt.debug:
+        wandb.init(project="Face_Swapping_Debug", name=nowname, config=opt, dir=logdir,resume=resume)
+    else:
+        wandb.init(project="Face_Swapping", name=nowname, config=opt, dir=logdir,resume=resume)
+    print(config)
+    
 
     # model
     model = instantiate_from_config(config.model)
@@ -518,6 +539,12 @@ if __name__ == "__main__":
         else:
             model.load_state_dict(torch.load(opt.pretrained_model,map_location='cpu')['state_dict'],strict=False)
             print("Load Stable Diffusion v1-4!")
+
+    if opt.train_cross_attn_only:
+        for name, param in model.named_parameters():
+            print(name)
+            if 'SpatialTransformer' not in name:
+                param.requires_grad = False
 
     # trainer and callbacks
     trainer_kwargs = dict()

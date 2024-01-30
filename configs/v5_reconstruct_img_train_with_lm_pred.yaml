@@ -122,7 +122,7 @@ data:
           target: ldm.data.celebA.CelebAdataset
           params:
               state: train
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
+              dataset_dir: dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
@@ -131,7 +131,7 @@ data:
           target: ldm.data.celebA.CelebAdataset
           params:
               state: validation
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
+              dataset_dir: dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
@@ -139,7 +139,7 @@ data:
           target: ldm.data.celebA.CelebAdataset
           params:
               state: test
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
+              dataset_dir: dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
 

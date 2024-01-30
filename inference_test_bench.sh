@@ -1,13 +1,13 @@
 
 # Set variables
-name="v12_reconstruct_img_train_correct_sep_head_att"
+name="v4_reconstruct_img_train_ffhq_30"
 Results_dir="results/${name}"
 Results_out="results/${name}/results"
 Write_results="results/quantitative/P4s/${name}"
 device=0
 
-CONFIG="configs/v12_reconstruct_img_train_correct_sep_head_att.yaml"
-CKPT="models/Paint-by-Example/v12_reconstruct_img_train_correct_sep_head_att/PBE/celebA/2023-11-08T14-32-56_v12_reconstruct_img_train_correct_sep_head_att/checkpoints/last.ckpt"
+CONFIG="configs/v4_reconstruct_img_train_ffhq.yaml"
+CKPT="models/Paint-by-Example/v8_concat_feat_scaled_op_multi_scale_false/PBE/ffhq/2023-12-05T21-41-00_v4_reconstruct_img_train_ffhq/checkpoints/last.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"

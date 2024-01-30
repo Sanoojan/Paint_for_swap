@@ -34,12 +34,11 @@
 # --resume ?????
 
 
-CUDA_VISIBLE_DEVICES=3 python -u main_swap.py \
---logdir models/Paint-by-Example/v12_reconstruct_img_train_correct_sep_head_att/PBE/celebA/ \
+CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
+--logdir models/Paint-by-Example/v4_reconstruct_img_train_ffhq_LPIPS/PBE/ffhq/ \
 --pretrained_model checkpoints/model.ckpt \
---base configs/v12_reconstruct_img_train_correct_sep_head_att.yaml \
+--base configs/v4_reconstruct_img_train_ffhq_LPIPS.yaml \
 --scale_lr False 
-
 
 # --resume models/Paint-by-Example/v10_reconstruct_img_train_correct_attention_layers/PBE/celebA/2023-11-05T00-52-37_v10_reconstruct_img_train_correct_attention_layers/checkpoints/last.ckpt
 

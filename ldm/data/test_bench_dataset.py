@@ -134,7 +134,7 @@ class CelebAdataset(data.Dataset):
         self.load_vis_img=load_vis_img
         self.state=state
         self.args=args
-        self.load_prior=True
+        self.load_prior=False
         self.kernel = np.ones((1, 1), np.uint8)
         self.random_trans=A.Compose([
             A.Resize(height=224,width=224),
@@ -163,15 +163,19 @@ class CelebAdataset(data.Dataset):
             self.labels_vis =  sorted([osp.join(args['dataset_dir'], "vis", "%d.png"%idx) for idx in range(28000, 30000)]) if self.load_vis_img else None
         else:
             data_path="intermediate_renact/results_2"
-            self.imgs=sorted([osp.join(data_path, "%d.jpg"%idx) for idx in range(28000, 29000)])
-            # self.imgs = sorted([osp.join(args['dataset_dir'], "CelebA-HQ-img", "%d.jpg"%idx) for idx in range(28000, 29000)])
+            ref_img_path="dataset/FaceData/CelebAMask-HQ/Val_cropped"
+            ref_img_mask_path="dataset/FaceData/CelebAMask-HQ/Val_cropped_mask"
+            # self.imgs=sorted([osp.join(data_path, "%d.jpg"%idx) for idx in range(28000, 29000)])
+            self.imgs = sorted([osp.join(args['dataset_dir'], "CelebA-HQ-img", "%d.jpg"%idx) for idx in range(28000, 29000)])
             # self.labels = ([osp.join(self.root, "CelebA-HQ-mask", "%d"%int(idx/2000) ,'{0:0=5d}'.format(idx)+'_skin.png') for idx in range(28000, 30000)])
             self.labels =  sorted([osp.join(args['dataset_dir'], "CelebA-HQ-mask/Overall_mask", "%d.png"%idx) for idx in range(28000, 29000)]) 
             self.labels_vis =  sorted([osp.join(args['dataset_dir'], "vis", "%d.png"%idx) for idx in range(28000, 29000)]) if self.load_vis_img else None
 
             self.ref_imgs = sorted([osp.join(args['dataset_dir'], "CelebA-HQ-img", "%d.jpg"%idx) for idx in range(29000, 30000)])
+            # self.ref_imgs = sorted([osp.join(ref_img_path, "%d.jpg"%idx) for idx in range(29000, 30000)])
             # self.labels = ([osp.join(self.root, "CelebA-HQ-mask", "%d"%int(idx/2000) ,'{0:0=5d}'.format(idx)+'_skin.png') for idx in range(28000, 30000)])
             self.ref_labels =  sorted([osp.join(args['dataset_dir'], "CelebA-HQ-mask/Overall_mask", "%d.png"%idx) for idx in range(29000, 30000)]) 
+            # self.ref_labels =  sorted([osp.join(ref_img_mask_path, "%d.png"%idx) for idx in range(29000, 30000)]) 
             self.ref_abels_vis =  sorted([osp.join(args['dataset_dir'], "vis", "%d.png"%idx) for idx in range(29000, 30000)]) if self.load_vis_img else None
 
             self.ref_imgs= self.ref_imgs[:int(len(self.imgs)*self.fraction)]
@@ -342,7 +346,7 @@ class CelebAdataset(data.Dataset):
             prior_image_tensor=get_tensor()(prior_img)
             # prior_image_tensor = prior_img
         else:
-            prior_image_tensor = None
+            prior_image_tensor = image_tensor
         
         if self.Fullmask:
             return image_tensor,prior_image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_img_full,"ref_imgs":ref_image_tensor},str(index).zfill(12)

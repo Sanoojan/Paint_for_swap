@@ -13,7 +13,7 @@ import threading
 import random
 from turtle import left, right
 import numpy as np
-from typing import Callable, List, Tuple, Union
+from typing import Any, Callable, List, Tuple, Union
 from PIL import Image,ImageDraw
 import torch.utils.data as data
 import json
@@ -36,6 +36,62 @@ import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
 from einops import rearrange
 from torchvision.utils import save_image
+
+
+
+import warnings
+warnings.filterwarnings("ignore")
+
+
+from torchvision.transforms import ToTensor, ToPILImage
+# sys.path.append('/data/pzb/EAT/attack')
+from thinplatespline.batch import TPS
+from thinplatespline.tps import tps_warp
+TOTEN = ToTensor()
+TOPIL = ToPILImage()
+DEVICE = torch.device("cpu")
+
+def grid_points_2d(width, height, device=DEVICE):
+    """
+    Create 2d grid points. Distribute points across a width and height,
+    with the resulting coordinates constrained to -1, 1
+    returns tensor shape (width * height, 2)
+    """
+    xx, yy = torch.meshgrid(
+        [torch.linspace(-1.0, 1.0, height, device=device),
+         torch.linspace(-1.0, 1.0, width, device=device)])
+    return torch.stack([yy, xx], dim=-1).contiguous().view(-1, 2)
+def noisy_grid(width, height, noise_matrix, device=DEVICE):
+    """
+    Make uniform grid points, and add noise except for edge points.
+    """
+    grid = grid_points_2d(width, height, device)
+    mod = torch.zeros([height, width, 2], device=device)
+    mod[1:height - 1, 1:width - 1, :] = noise_matrix
+    return grid + mod.reshape(-1, 2)
+def grid_to_img(grid_points, width, height):
+    """
+    convert (N * 2) tensor of grid points in -1, 1 to tuple of (x, y)
+    scaled to width, height.
+    return (x, y) to plot"""
+    grid_clone = grid_points.clone().detach().cpu().numpy()
+    x = (1 + grid_clone[..., 0]) * (width - 1) / 2
+    y = (1 + grid_clone[..., 1]) * (height - 1) / 2
+    return x.flatten(), y.flatten()
+def decow(img,scale=0.8):
+    n, c, w, h = img.size()
+    device = torch.device('cpu')
+    a = 3
+    X = grid_points_2d(a, a, device)
+    noise = (torch.rand([a-2, a-2, 2]) - 0.5) * scale
+    # noise = (torch.rand([1, 1, 2]) - 0.5)
+    Y = noisy_grid(a, a, noise, device)
+    tpsb = TPS(size=(h, w), device=device)
+    warped_grid_b = tpsb(X[None, ...], Y[None, ...])
+    warped_grid_b = warped_grid_b.repeat(img.shape[0], 1, 1, 1)
+    awt_img = torch.grid_sampler_2d(img, warped_grid_b, 0, 0, False)
+    return awt_img
+
 
 def bbox_process(bbox):
     x_min = int(bbox[0])
@@ -370,7 +426,9 @@ class FFHQdataset(data.Dataset):
         image_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(image_tensor_cropped)
         mask_tensor_resize=T.Resize([self.args['image_size'],self.args['image_size']])(mask_tensor_cropped)
         
-        
+        # a=random.randint(1,4)
+        scale=random.uniform(0.5, 1.0)
+        mask_tensor_resize=decow(mask_tensor_resize.unsqueeze(0) ,scale=scale).squeeze(0)
         inpaint_tensor_resize=image_tensor_resize*mask_tensor_resize
         
         mask_ref=1-T.Resize([512,512])(mask_tensor)
@@ -629,6 +687,21 @@ class FFHQdataset(data.Dataset):
 
     def __len__(self):
         return self.length
+    
+    
+
+    
+
+
+
+        
+
+
+
+
+
+
+
     
     
 

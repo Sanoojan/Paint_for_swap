@@ -31,7 +31,7 @@
 # CUDA_VISIBLE_DEVICES=2 python scripts/inference.py \
 # --plms --outdir results \
 # --config configs/v1.yaml \
-# --ckpt /home/sanoojan/Paint_for_swap/models/Paint-by-Example/finetune/PBE/celebA/2023-09-13T22-14-47_v2/checkpoints/last.ckpt \
+# --ckpt models/Paint-by-Example/finetune/PBE/celebA/2023-09-13T22-14-47_v2/checkpoints/last.ckpt \
 # --image_path /home/sanoojan/e4s/example/input/faceswap/andy/546.jpg \
 # --mask_path /home/sanoojan/e4s/data/FaceData/CelebAMask-HQ/CelebA-HQ-mask/0/00000_skin.png \
 # --reference_path /home/sanoojan/e4s/example/input/faceswap/peng/peng_800.jpg \
