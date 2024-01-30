@@ -45,9 +45,6 @@ model:
         use_checkpoint: True
         legacy: False
         add_conv_in_front_of_unet: False
-        sep_head_att: True #new
-        land_mark_id_seperate_layers: False #new
-        head_splits: [6,2] #new
 
     first_stage_config:
       target: ldm.models.autoencoder.AutoencoderKL
@@ -75,21 +72,23 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenCLIPImageEmbedder
       other_params:
-        clip_weight: 0.1
-        ID_weight: 0.9
+        clip_weight: 1.0
+        ID_weight: 10.0
         Landmark_cond: True
         Landmarks_weight: 0.05
         arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
         concat_feat: False
         land_mark_id_seperate_layers: False
         multi_scale_ID: False # True was used for the previous training there is an issue
-        sep_head_att: True
+        sep_head_att: False
         Additional_config:
           Reconstruct_initial: True
-          Reconstruct_DDIM_steps: 5
-          ID_loss_weight: 0.1
-          LPIPS_loss_weight: 0.1
+          Reconstruct_DDIM_steps: 4
+          ID_loss_weight: 0.3
+          LPIPS_loss_weight: 0.0
           Landmark_loss_weight: 0
+        
+        
         
 
 # data:
@@ -161,9 +160,11 @@ data:
 #     accelerator: 'gpu'
 #     gpus: "0,1,2,3,4,5,6,7"
 
+
 lightning:
   trainer:
-    max_epochs: 20
+    max_epochs: 50
     num_nodes: 1
     accelerator: 'gpu'
     gpus: "0"
+    num_sanity_val_steps: 0

@@ -1,13 +1,13 @@
 
 # Set variables
-name="v4_reconstruct_img_train_4_step_multi_false-ep49"
+name="v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_39"
 Results_dir="results_new/${name}"
 Results_out="results_new/${name}/results"
 Write_results="Quantitative_new/P4s/${name}"
-device=5
+device=1
 
-CONFIG="models/Paint-by-Example/v4_reconstruct_img_train_4_step_multi_false_with_LPIPS/PBE/celebA/2024-01-02T07-50-43_v4_reconstruct_img_train_4_step_multi_false/configs/2024-01-02T07-50-43-project.yaml"
-CKPT="models/Paint-by-Example/v4_reconstruct_img_train_4_step_multi_false_with_LPIPS/PBE/celebA/2024-01-02T07-50-43_v4_reconstruct_img_train_4_step_multi_false/checkpoints/epoch=000049.ckpt"
+CONFIG="models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT/PBE/celebA/2024-01-24T13-41-55_v4_reconstruct_img_train_2_step_multi_false/configs/2024-01-24T13-41-55-project.yaml"
+CKPT="models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT/PBE/celebA/2024-01-24T13-41-55_v4_reconstruct_img_train_2_step_multi_false/checkpoints/epoch=000039.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -26,11 +26,13 @@ fi
 
 # Run inference
 
-CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
+python scripts/inference_test_bench.py \
     --outdir "${Results_dir}" \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 5 \
+    --n_samples 10 \
+    --device_ID ${device} \
     --dataset "CelebA" 
 
     # --Start_from_target \
@@ -71,5 +73,6 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --d
     "${source_path}" \
     "${Results_out}" \
     "${source_mask_path}" \
-    "${target_mask_path}"  \
-    --print_sim True  >> "$output_filename"  
+    "${target_mask_path}" \
+    --print_sim True  >> "$output_filename"   
+

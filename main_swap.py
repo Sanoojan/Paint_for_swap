@@ -51,8 +51,8 @@ def get_parser(**parser_kwargs):
         "--resume",
         type=str,
         const=True,
-        default="",
-        # default="models/Paint-by-Example/v12_reconstruct_img_train_correct_sep_head_att/PBE/celebA/2023-11-08T14-32-56_v12_reconstruct_img_train_correct_sep_head_att/checkpoints/last.ckpt",
+        # default="",
+        default="models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT/PBE/celebA/2024-01-24T13-41-55_v4_reconstruct_img_train_2_step_multi_false/checkpoints/epoch=000031.ckpt",
         nargs="?",
         help="resume from logdir or checkpoint in logdir",
     )
@@ -455,7 +455,7 @@ if __name__ == "__main__":
     
     if opt.debug:
         # set cuda visible devices =3
-        os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+        os.environ["CUDA_VISIBLE_DEVICES"] = "1"
         
     
     if opt.name and opt.resume:

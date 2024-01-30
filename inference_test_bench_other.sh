@@ -3,7 +3,7 @@
 # Results_out="results/v4_reconstruct_img_train_with_neck_DDIM/results"
 # Results_out="results/v4_reconstruct_img_train_correct_ID_ch/results"
 # Results_out="/home/sanoojan/other_swappers/SimSwap/output/CelebA/results" # 51.6, 72.8
-# Results_out="/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_crop/results" #38.3, 57.3
+Results_out="/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_crop/results" #38.3, 57.3
 # Results_out="/home/sanoojan/other_swappers/DiffFace/results/CelebA/results" # 38.3, 57.3
 # Results_out="results/v9_add_feat/results"
 # Results_out="results/v4_reconstruct_img_train_with_DIFT_recon_750_noise/results"
@@ -16,9 +16,9 @@
 # Results_out="results/v4_reconstruct_img_train_correct_id/results"       # 11.7,24,8,0.31
 # Results_out="results/v4_reconstruct_img_train_correct_id_from_reenact/results"    # 15.4,32.1,0.33
 # Results_out="results/v4_reconstruct_img_train_2_step_ep_38/results"
-Results_out="/home/sanoojan/other_swappers/FaceDancer/FaceDancer_c_HQ/results"
+# Results_out="/home/sanoojan/other_swappers/FaceDancer/FaceDancer_c_HQ/results"
 
-Write_results="results/quantitative/other_swappers/FaceDancer"
+Write_results="results/quantitative/other_swappers/e4s"
 
 # Set variables
 # name="avg_3_features_full_face_with_augs_scale1"

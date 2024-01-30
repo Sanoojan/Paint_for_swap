@@ -31,6 +31,9 @@ from torchvision.transforms import Resize
 from PIL import Image
 from torchvision.transforms import PILToTensor
 
+
+
+
 # from dift.src.models.dift_sd import SDFeaturizer
 # from dift.src.utils.visualization import Demo
 
@@ -46,8 +49,8 @@ safety_model_id = "CompVis/stable-diffusion-safety-checker"
 safety_feature_extractor = AutoFeatureExtractor.from_pretrained(safety_model_id)
 safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
-#set cuda device 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+# set cuda device 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 
 
@@ -137,6 +140,12 @@ def main():
         help="the prompt to render"
     )
     parser.add_argument(
+        "--device_ID",
+        type=int,
+        default=5,
+        help="device_ID",
+    )
+    parser.add_argument(
         "--outdir",
         type=str,
         nargs="?",
@@ -224,7 +233,7 @@ def main():
     parser.add_argument(
         "--n_samples",
         type=int,
-        default=10,
+        default=2,
         help="how many samples to produce for each given prompt. A.k.a. batch size",
     )
     parser.add_argument(
@@ -243,6 +252,7 @@ def main():
         "--dataset",
         type=str,
         help="dataset: CelebA,FFHQ",
+        default='CelebA'
     )
     parser.add_argument(
         "--from-file",
@@ -252,13 +262,13 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/v4_reconstruct_img_train.yaml",
+        default="configs/v4_reconstruct_img_train_2_step_multi_false.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="models/Paint-by-Example/finetune_with_Arcface_features_clip_avg/PBE/celbA/2023-09-18T22-18-23_v2/checkpoints/last.ckpt",
+        default="models/Paint-by-Example/v4_reconstruct_img_train_1_step/PBE/celebA/2023-11-30T12-17-55_v4_reconstruct_img_train_2_step_multi_false/checkpoints/last.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(
@@ -289,7 +299,7 @@ def main():
         opt.outdir = "outputs/txt2img-samples-laion400m"
 
     seed_everything(opt.seed)
-
+    torch.cuda.set_device(opt.device_ID)
     config = OmegaConf.load(f"{opt.config}")
     model = load_model_from_config(config, f"{opt.ckpt}")
 
@@ -443,12 +453,17 @@ def main():
                     def un_norm(x):
                         return (x+1.0)/2.0
                     def un_norm_clip(x1):
-                        x = x1*1.0
-
-                        x[0,:,:] = x[0,:,:] * 0.26862954 + 0.48145466
-                        x[1,:,:] = x[1,:,:] * 0.26130258 + 0.4578275
-                        x[2,:,:] = x[2,:,:] * 0.27577711 + 0.40821073
+                        x = x1*1.0 # to avoid changing the original tensor or clone() can be used
+                        reduce=False
+                        if len(x.shape)==3:
+                            x = x.unsqueeze(0)
+                            reduce=True
+                        x[:,0,:,:] = x[:,0,:,:] * 0.26862954 + 0.48145466
+                        x[:,1,:,:] = x[:,1,:,:] * 0.26130258 + 0.4578275
+                        x[:,2,:,:] = x[:,2,:,:] * 0.27577711 + 0.40821073
                         
+                        if reduce:
+                            x = x.squeeze(0)
                         return x
 
                     if not opt.skip_save:

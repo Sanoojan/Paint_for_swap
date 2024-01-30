@@ -51,11 +51,16 @@ def disabled_train(self, mode=True):
 
 def un_norm_clip(x1):
     x = x1*1.0 # to avoid changing the original tensor or clone() can be used
-
-    x[0,:,:] = x[0,:,:] * 0.26862954 + 0.48145466
-    x[1,:,:] = x[1,:,:] * 0.26130258 + 0.4578275
-    x[2,:,:] = x[2,:,:] * 0.27577711 + 0.40821073
+    reduce=False
+    if len(x.shape)==3:
+        x = x.unsqueeze(0)
+        reduce=True
+    x[:,0,:,:] = x[:,0,:,:] * 0.26862954 + 0.48145466
+    x[:,1,:,:] = x[:,1,:,:] * 0.26130258 + 0.4578275
+    x[:,2,:,:] = x[:,2,:,:] * 0.27577711 + 0.40821073
     
+    if reduce:
+        x = x.squeeze(0)
     return x
 
 def un_norm(x):
@@ -1502,23 +1507,31 @@ class LatentDiffusion(DDPM):
             landmark_pred=self.landmark_predictor(feat_cat)
         
         ########################
+        t_new = torch.randint(self.num_timesteps-1, self.num_timesteps, (x_start.shape[0],), device=self.device).long().to(self.device)
+        # t_new=torch.tensor(t_new).to(self.device)
+        # noise_rec = default(noise, lambda: torch.randn_like(x_start[:,:4,:,:]))
+        x_noisy_rec = self.q_sample(x_start=x_start[:,:4,:,:], t=t_new, noise=noise)
+        x_noisy_rec = torch.cat((x_noisy_rec,x_start[:,4:,:,:]),dim=1)
+        
+        
         ddim_steps=self.Reconstruct_DDIM_steps
-        n_samples=x_noisy.shape[0]
+        n_samples=x_noisy_rec.shape[0]
         shape=(4,64,64)
         scale=5
         ddim_eta=0.0
-        start_code=x_noisy
+        start_code=x_noisy_rec
         test_model_kwargs=None
-        t=t
+        # t=t
         
         # Here flipping the cond so that different sorce image will go to the model
         # cond=torch.flip(cond,[0]) # 4,1,768
         #flip references
+        
         reference=torch.flip(reference,[0]) # 4,3,224,224
         
         cond=self.conditioning_with_feat(reference.to(self.device),landmarks=landmarks).float()
         
-        samples_ddim, _ = self.sampler.sample_train(S=ddim_steps,
+        samples_ddim, intermediates = self.sampler.sample_train(S=ddim_steps,
                                                 conditioning=cond,
                                                 batch_size=n_samples,
                                                 shape=shape,
@@ -1527,12 +1540,13 @@ class LatentDiffusion(DDPM):
                                                 unconditional_conditioning=None,
                                                 eta=ddim_eta,
                                                 x_T=start_code,
-                                                t=t,
+                                                t=t_new,
                                                 test_model_kwargs=test_model_kwargs)
 
         
         x_samples_ddim= self.decode_first_stage(samples_ddim)
-        
+        x_pred_x0=self.decode_first_stage(intermediates['pred_x0'][0])
+        x_pred_x0_l=self.decode_first_stage(intermediates['pred_x0'][-1])
         # x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
         # x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
         

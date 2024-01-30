@@ -12,6 +12,20 @@ def un_norm_clip(x1):
     
     return x
 
+def un_norm_clip(x1):
+    x = x1*1.0 # to avoid changing the original tensor or clone() can be used
+    reduce=False
+    if len(x.shape)==3:
+        x = x.unsqueeze(0)
+        reduce=True
+    x[:,0,:,:] = x[:,0,:,:] * 0.26862954 + 0.48145466
+    x[:,1,:,:] = x[:,1,:,:] * 0.26130258 + 0.4578275
+    x[:,2,:,:] = x[:,2,:,:] * 0.27577711 + 0.40821073
+    
+    if reduce:
+        x = x.squeeze(0)
+    return x
+
 def un_norm(x):
     # x = x.clone()
     return (x+1.0)/2.0
