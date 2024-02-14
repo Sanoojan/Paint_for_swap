@@ -83,7 +83,7 @@ class IDLoss(nn.Module):
         self.facenet = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
         # self.facenet=iresnet100(pretrained=False, fp16=False) # changed by sanoojan
         
-        self.facenet.load_state_dict(torch.load("/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"))
+        self.facenet.load_state_dict(torch.load("Other_dependencies/arcface/model_ir_se50.pth"))
         
         self.face_pool_2 = torch.nn.AdaptiveAvgPool2d((112, 112))
         self.facenet.eval()
@@ -355,7 +355,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     # CosFace = iresnet100()
     
     
-    cosface_state_dict = torch.load('/home/sanoojan/Paint_for_swap/eval_tool/Face_rec_models/cosface/net_sphere20_data_vggface2_acc_9955.pth')
+    cosface_state_dict = torch.load('eval_tool/Face_rec_models/cosface/net_sphere20_data_vggface2_acc_9955.pth')
     CosFace = cosface.sphere().cuda()
     
     

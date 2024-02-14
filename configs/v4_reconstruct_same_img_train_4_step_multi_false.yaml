@@ -72,19 +72,19 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenCLIPImageEmbedder
       other_params:
-        clip_weight: 0
+        clip_weight: 0.1
         ID_weight: 1.0
         Landmark_cond: True
         Landmarks_weight: 0.01
         arcface_path: "Other_dependencies/arcface/model_ir_se50.pth"
         concat_feat: False
-        stack_feat: False
         land_mark_id_seperate_layers: False
         multi_scale_ID: False # True was used for the previous training there is an issue
         sep_head_att: False
         weight_division: False
         Additional_config:
           Reconstruct_initial: True
+          Same_image_reconstruct: True
           Reconstruct_DDIM_steps: 4
           ID_loss_weight: 0.3
           LPIPS_loss_weight: 0.0
@@ -167,4 +167,4 @@ lightning:
     max_epochs: 60
     num_nodes: 1
     accelerator: 'gpu'
-    gpus: "0,1"
+    gpus: "0,1,2,3"

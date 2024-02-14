@@ -85,9 +85,9 @@ model:
         weight_division: False
         Additional_config:
           Reconstruct_initial: True
-          Reconstruct_DDIM_steps: 4
-          ID_loss_weight: 0.3
-          LPIPS_loss_weight: 0.0
+          Reconstruct_DDIM_steps: 2
+          ID_loss_weight: 0.2
+          LPIPS_loss_weight: 0.1
           Landmark_loss_weight: 0
         
         
@@ -164,7 +164,7 @@ data:
 
 lightning:
   trainer:
-    max_epochs: 60
+    max_epochs: 15
     num_nodes: 1
     accelerator: 'gpu'
     gpus: "0,1"
