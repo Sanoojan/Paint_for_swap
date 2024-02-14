@@ -12,6 +12,8 @@ from PIL import Image
 from scipy.ndimage import gaussian_filter1d
 from tqdm import tqdm
 import cv2
+import dlib
+
 
 def rect_to_bb(rect):
 	# take a bounding predicted by dlib and convert it
@@ -183,7 +185,7 @@ def crop_faces(IMAGE_SIZE, files, scale, center_sigma=0.0, xy_sigma=0.0, use_fa=
         predictor = None
         detector = None
     else:
-        import dlib
+        # import dlib
         fa = None
         predictor = dlib.shape_predictor("Other_dependencies/DLIB_landmark_det/shape_predictor_68_face_landmarks.dat")
         detector = dlib.get_frontal_face_detector()

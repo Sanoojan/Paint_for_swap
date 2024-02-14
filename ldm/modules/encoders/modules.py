@@ -171,6 +171,36 @@ class FrozenCLIPImageEmbedder(AbstractEncoder):
         return self(image)
 
 
+class FrozenCLIPTextEmbedder(AbstractEncoder):
+    """Uses the CLIP transformer encoder for text (from Hugging Face)"""
+    def __init__(self, version="openai/clip-vit-large-patch14"):
+        super().__init__()
+        self.transformer = CLIPTextModel.from_pretrained(version)
+        self.tokenizer = CLIPTokenizer.from_pretrained(version)
+        # model = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32")
+        # >>> tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+
+        # >>> inputs = tokenizer(["a photo of a cat", "a photo of a dog"], padding=True, return_tensors="pt")
+
+        # >>> outputs = model(**inputs)
+        # >>> last_hidden_state = outputs.last_hidden_state
+        # >>> pooled_output = outputs.pooler_output  # pooled (EOS token) states
+        self.freeze()
+
+    def freeze(self):
+        self.transformer = self.transformer.eval()
+        # self.tokenizer = self.tokenizer.eval()
+        for param in self.parameters():
+            param.requires_grad = False
+
+    def forward(self, text):
+        inputs= self.tokenizer(text, padding=True, return_tensors="pt")
+        inputs = {k: v.to(self.transformer.device) for k, v in inputs.items()}
+        z = self.transformer(**inputs)
+        return z
+
+    def encode(self, text):
+        return self(text)
 
 
 

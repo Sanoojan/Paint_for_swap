@@ -1,13 +1,13 @@
 
 # Set variables
-name="v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_39"
-Results_dir="results_new/${name}"
-Results_out="results_new/${name}/results"
-Write_results="Quantitative_new/P4s/${name}"
-device=1
+name="v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_with_src_hair"
+Results_dir="results_grad/${name}"
+Results_out="results_grad/${name}/results"
+Write_results="Quantitative_grad/P4s/${name}"
+device=0
 
-CONFIG="models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT/PBE/celebA/2024-01-24T13-41-55_v4_reconstruct_img_train_2_step_multi_false/configs/2024-01-24T13-41-55-project.yaml"
-CKPT="models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT/PBE/celebA/2024-01-24T13-41-55_v4_reconstruct_img_train_2_step_multi_false/checkpoints/epoch=000039.ckpt"
+CONFIG="models/Paint-by-Example/v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS/PBE/celebA/2024-02-05T22-04-36_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS/configs/2024-02-05T22-04-36-project.yaml"
+CKPT="models/Paint-by-Example/v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS/PBE/celebA/2024-02-05T22-04-36_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS/checkpoints/last.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -26,16 +26,17 @@ fi
 
 # Run inference
 
-python scripts/inference_test_bench.py \
-    --outdir "${Results_dir}" \
-    --config "${CONFIG}" \
-    --ckpt "${CKPT}" \
-    --scale 5 \
-    --n_samples 10 \
-    --device_ID ${device} \
-    --dataset "CelebA" 
+# python scripts/inference_test_bench.py \
+#     --outdir "${Results_dir}" \
+#     --config "${CONFIG}" \
+#     --ckpt "${CKPT}" \
+#     --scale 5 \
+#     --n_samples 5 \
+#     --device_ID ${device} \
+#     --dataset "CelebA" \
+#     --ddim_steps 50
 
-    # --Start_from_target \
+    # --Start_from_target 
     # --target_start_noise_t 800  
     
 
@@ -55,6 +56,10 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cu
     "${target_path}" \
     "${Results_out}"  >> "$output_filename"
 
+echo "Expression comarison with target:"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_face_recon.py --device cuda \
+    "${target_path}" \
+    "${Results_out}"  >> "$output_filename"
 
 echo "ID similarity with Target:"
 CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \

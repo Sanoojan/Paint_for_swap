@@ -76,16 +76,17 @@ model:
         ID_weight: 10.0
         Landmark_cond: True
         Landmarks_weight: 0.05
-        arcface_path: "/home/sanoojan/e4s/pretrained_ckpts/auxiliray/model_ir_se50.pth"
+        arcface_path: "Other_dependencies/arcface/model_ir_se50.pth"
         concat_feat: False
+        stack_feat: True
         land_mark_id_seperate_layers: False
         multi_scale_ID: False # True was used for the previous training there is an issue
         sep_head_att: False
         Additional_config:
           Reconstruct_initial: True
-          Reconstruct_DDIM_steps: 4
+          Reconstruct_DDIM_steps: 2
           ID_loss_weight: 0.3
-          LPIPS_loss_weight: 0.0
+          LPIPS_loss_weight: 0.1
           Landmark_loss_weight: 0
         
         
@@ -121,7 +122,7 @@ model:
 data:
   target: main_swap.DataModuleFromConfig
   params:
-      batch_size: 4
+      batch_size: 1
       wrap: False
       train:
           target: ldm.data.celebA.CelebAdataset
@@ -160,11 +161,9 @@ data:
 #     accelerator: 'gpu'
 #     gpus: "0,1,2,3,4,5,6,7"
 
-
 lightning:
   trainer:
-    max_epochs: 50
+    max_epochs: 60
     num_nodes: 1
     accelerator: 'gpu'
     gpus: "0"
-    num_sanity_val_steps: 0

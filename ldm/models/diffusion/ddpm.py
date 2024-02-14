@@ -36,6 +36,8 @@ from eval_tool.lpips.lpips import LPIPS
 import wandb
 from PIL import Image
 
+from ldm.modules.encoders.modules import FrozenCLIPTextEmbedder
+
 
 __conditioning_keys__ = {'concat': 'c_concat',
                          'crossattn': 'c_crossattn',
@@ -118,7 +120,7 @@ class IDLoss(nn.Module):
 
     
 
-    def forward(self, y_hat, y,clip_img=True):
+    def forward(self, y_hat, y,clip_img=True,return_seperate=False):
         n_samples = y.shape[0]
         y_feats_ms = self.extract_feats(y,clip_img=clip_img)  # Otherwise use the feature from there
 
@@ -127,7 +129,7 @@ class IDLoss(nn.Module):
         
         loss_all = 0
         sim_improvement_all = 0
-   
+        seperate_sim=[]
         for y_hat_feats, y_feats in zip(y_hat_feats_ms, y_feats_ms):
  
             loss = 0
@@ -137,15 +139,16 @@ class IDLoss(nn.Module):
             for i in range(n_samples):
                 sim_target = y_hat_feats[i].dot(y_feats[i])
                 sim_views = y_feats[i].dot(y_feats[i])
-    
-                
+
+                seperate_sim.append(sim_target)
                 loss += 1 - sim_target  # id loss
                 sim_improvement +=  float(sim_target) - float(sim_views)
                 count += 1
             
             loss_all += loss / count
             sim_improvement_all += sim_improvement / count
-    
+        if return_seperate:
+            return loss_all, sim_improvement_all, seperate_sim
         return loss_all, sim_improvement_all, None
 
 def uniform_on_device(r1, r2, shape, device):
@@ -587,7 +590,9 @@ class LatentDiffusion(DDPM):
         ckpt_path = kwargs.pop("ckpt_path", None)
         ignore_keys = kwargs.pop("ignore_keys", [])
         super().__init__(conditioning_key=conditioning_key, *args, **kwargs)
-        self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
+     
+        
+        # self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
         self.proj_out=nn.Linear(1024, 768)
         
         self.concat_mode = concat_mode
@@ -624,6 +629,11 @@ class LatentDiffusion(DDPM):
                     self.concat_feat=cond_stage_config.other_params.concat_feat
                 else:
                     self.concat_feat=False
+                if hasattr(cond_stage_config.other_params, 'stack_feat'):
+                    self.stack_feat=cond_stage_config.other_params.stack_feat
+                else:
+                    self.stack_feat=False
+                    
                 if hasattr(cond_stage_config.other_params, 'weight_division'):
                     self.weight_division=cond_stage_config.other_params.weight_division
                 else:
@@ -633,9 +643,17 @@ class LatentDiffusion(DDPM):
                     self.trainable_keys=cond_stage_config.other_params.trainable_keys
                 else:
                     self.partial_training=False
+                if hasattr(cond_stage_config.other_params.Additional_config, 'Same_image_reconstruct'):
+                    self.Same_image_reconstruct=cond_stage_config.other_params.Additional_config.Same_image_reconstruct
+                else:
+                    self.Same_image_reconstruct=False
                 if self.concat_feat:
                     self.concat_feat_proj=nn.Linear(768*2+136, 768)
                     # self.concat_feat_proj_out=nn.Linear(768, 768)
+                if self.stack_feat:
+                    pass
+                    # self.stack_feat_proj=nn.Linear(768*2+136, 768)
+                    # self.stack_feat_proj_out=nn.Linear(768, 768)
                     
             else:
                 self.Reconstruct_initial=False
@@ -649,6 +667,12 @@ class LatentDiffusion(DDPM):
             self.Landmark_cond=False
             self.Landmarks_weight=0
             self.Landmark_loss_weight=0
+        if self.stack_feat:
+            stacks=int(self.clip_weight>0)+int(self.ID_weight>0)+int(self.Landmarks_weight>0)
+            self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
+            self.other_learnable_vector = nn.Parameter(torch.randn((1,stacks-1,768)), requires_grad=True)
+        else:
+            self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
         if self.ID_weight>0:
             if self.multi_scale_ID:
                 self.ID_proj_out=nn.Linear(200704, 768)
@@ -667,7 +691,8 @@ class LatentDiffusion(DDPM):
             self.landmark_proj_out=nn.Linear(136, 768)
             if self.concat_feat:
                 self.landmark_proj_out=nn.Identity()
-            
+            if self.stack_feat:
+                self.landmark_proj_out=nn.Linear(136, 768)
         # total_devices = self.hparams.n_gpus * self.hparams.n_nodes
         # self.train_batches = len(self.train_dataloader()) // total_devices
         # self.train_reduce_steps = (self.hparams.epochs * self.train_batches) // (self.hparams.accumulate_grad_batches * 2) # for half of the time full trining with ID
@@ -684,6 +709,8 @@ class LatentDiffusion(DDPM):
             self.register_buffer('scale_factor', torch.tensor(scale_factor))
         self.instantiate_first_stage(first_stage_config)
         self.instantiate_cond_stage(cond_stage_config)
+        
+        self.TextEncoder=FrozenCLIPTextEmbedder()
         
         self.cond_stage_forward = cond_stage_forward
         self.clip_denoised = False
@@ -804,7 +831,7 @@ class LatentDiffusion(DDPM):
             c = getattr(self.cond_stage_model, self.cond_stage_forward)(c)
         return c
     
-    def conditioning_with_feat(self,x,landmarks=None,is_train=False):
+    def conditioning_with_feat(self,x,landmarks=None,is_train=False,tar=None):
         c=0
         c2=0
         #find the model is in training or not
@@ -834,10 +861,50 @@ class LatentDiffusion(DDPM):
         
         
         if self.clip_weight>0:
-            c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
-            c = self.proj_out(c) #-->c:[4,1,768]
-            if self.normalize:
-                norm_coeff=c.norm(dim=2, keepdim=True)
+            if tar is not None:
+                # tar1=tar*1.0
+                # tar1=un_norm(tar1)
+                # tar1=tar1.to(self.device)
+                # # resize tar1 to 224
+                # tar1=TF.resize(tar1, (224,224))
+
+                # tar1=TF.normalize(tar1, mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
+                # c=self.get_learned_conditioning(tar1)
+                # c = self.proj_out(c)
+                
+                
+                c_src=self.get_learned_conditioning(x)
+                c_src = self.proj_out(c_src)
+                
+                # ExpressionTexts=['a photo of happy face','a photo of sad face','a photo of angry face','a photo of surprised face','a photo of disgusted face','a photo of scared face','a photo of neutral face']
+                # ExpressionFeatures=self.TextEncoder(ExpressionTexts)
+                # ExpressionFeatures=ExpressionFeatures[1]
+                # ExpressionFeatures_normed=ExpressionFeatures/ExpressionFeatures.norm(dim=1, keepdim=True)
+                # c_normed=c/c.norm(dim=2, keepdim=True)
+                # c_normed=c_normed.squeeze(1)
+                # c_src_normed=c_src/c_src.norm(dim=2, keepdim=True)
+                # c_src_normed=c_src_normed.squeeze(1)
+                
+                # c_exp_basis=c_normed@ExpressionFeatures.T
+                # c_src_exp_basis=c_src_normed@ExpressionFeatures.T
+                # exp_coeff_diff=c_exp_basis-c_src_exp_basis
+                # c_exp_weighted_features=exp_coeff_diff@ExpressionFeatures
+                
+                # c=c_src+c_exp_weighted_features.unsqueeze(1)
+                
+                c=c_src
+                # c_exp_weighted_features=c_exp_basis@ExpressionFeatures
+                
+                 #-->c:[4,1,768]
+                if self.normalize:
+                    norm_coeff=c.norm(dim=2, keepdim=True)  
+                
+            else:
+            
+                c = self.get_learned_conditioning(x) #-->c:[4,1,1024]
+                c = self.proj_out(c) #-->c:[4,1,768]
+                if self.normalize:
+                    norm_coeff=c.norm(dim=2, keepdim=True)
         if self.ID_weight>0:
             c2=self.face_ID_model.extract_feats(x)[0]
             c2 = self.ID_proj_out(c2) #-->c:[4,768]
@@ -856,6 +923,10 @@ class LatentDiffusion(DDPM):
             # concat c ,c2, landmarks
             conc=torch.cat([c,c2,landmarks],dim=-1)
             return self.concat_feat_proj(conc)
+        if self.stack_feat:
+            # stack c ,c2, landmarks
+            conc=torch.cat([c,c2,landmarks],dim=-2)
+            return conc
         if self.land_mark_id_seperate_layers or self.sep_head_att:
             if self.weight_division:
                 c=(c*self.clip_weight+c2*self.ID_weight)/(self.clip_weight+self.ID_weight)
@@ -1162,6 +1233,8 @@ class LatentDiffusion(DDPM):
                 else:
                     return self.first_stage_model.decode(z)
 
+   
+
     # same as above but without decorator
     def differentiable_decode_first_stage(self, z, predict_cids=False, force_not_quantize=False):
         if predict_cids:
@@ -1312,6 +1385,12 @@ class LatentDiffusion(DDPM):
                 # concat c, landmarks
                 landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks                
                 conc=torch.cat([conc,landmarks],dim=-1)
+                return self.p_losses_face(x, conc, t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)
+            elif self.stack_feat:
+                conc=self.learnable_vector.repeat(x.shape[0],1,1)
+                # stack c, landmarks
+                coc2=self.other_learnable_vector.repeat(x.shape[0],1,1)
+                conc=torch.cat([conc,coc2],dim=-2)
                 return self.p_losses_face(x, conc, t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)
             return self.p_losses_face(x, self.learnable_vector.repeat(x.shape[0],1,1), t,reference=reference,GT_tar=GT_tar,landmarks=landmarks, *args, **kwargs)
         else:  #x:[4,9,64,64] c:[4,1,768] x: img,inpaint_img,mask after first stage c:clip embedding
@@ -1472,7 +1551,7 @@ class LatentDiffusion(DDPM):
         loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
         loss_dict.update({f'{prefix}/loss_simple': loss_simple.mean()})
 
-
+        self.logvar = self.logvar.to(self.device)
         logvar_t = self.logvar[t].to(self.device)
         loss = loss_simple / torch.exp(logvar_t) + logvar_t
         # loss = loss_simple / torch.exp(self.logvar) + self.logvar
@@ -1526,12 +1605,11 @@ class LatentDiffusion(DDPM):
         # Here flipping the cond so that different sorce image will go to the model
         # cond=torch.flip(cond,[0]) # 4,1,768
         #flip references
+        if not self.Same_image_reconstruct:
+            reference=torch.flip(reference,[0]) # 4,3,224,224
+            cond=self.conditioning_with_feat(reference.to(self.device),landmarks=landmarks).float()
         
-        reference=torch.flip(reference,[0]) # 4,3,224,224
-        
-        cond=self.conditioning_with_feat(reference.to(self.device),landmarks=landmarks).float()
-        
-        samples_ddim, intermediates = self.sampler.sample_train(S=ddim_steps,
+        samples_ddim, _ = self.sampler.sample_train(S=ddim_steps,
                                                 conditioning=cond,
                                                 batch_size=n_samples,
                                                 shape=shape,
@@ -1543,10 +1621,12 @@ class LatentDiffusion(DDPM):
                                                 t=t_new,
                                                 test_model_kwargs=test_model_kwargs)
 
+       
         
-        x_samples_ddim= self.decode_first_stage(samples_ddim)
-        x_pred_x0=self.decode_first_stage(intermediates['pred_x0'][0])
-        x_pred_x0_l=self.decode_first_stage(intermediates['pred_x0'][-1])
+        x_samples_ddim= self.differentiable_decode_first_stage(samples_ddim)
+        # x_pred_x0=self.decode_first_stage(intermediates['pred_x0'][0])
+        # x_pred_x0_l=self.decode_first_stage(intermediates['pred_x0'][-1])
+        
         # x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
         # x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
         
@@ -1561,6 +1641,7 @@ class LatentDiffusion(DDPM):
         loss_lpips=0
         loss_landmark=0
         
+        # model_output=samples_ddim
         if reference is not None:
             reference=un_norm_clip(reference)
             reference = TF.normalize(reference, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
@@ -1610,11 +1691,11 @@ class LatentDiffusion(DDPM):
             target = noise
         else:
             raise NotImplementedError()
-
+    
         loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
         loss_dict.update({f'{prefix}/loss_simple': loss_simple.mean()})
 
-
+        self.logvar=self.logvar.to(self.device)
         logvar_t = self.logvar[t].to(self.device)
         loss = loss_simple / torch.exp(logvar_t) + logvar_t
         # loss = loss_simple / torch.exp(self.logvar) + self.logvar

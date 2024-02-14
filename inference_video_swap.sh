@@ -1,13 +1,13 @@
 
 # Set variables
-name="debug"
+name="New_v4_no_grad_ep49_mouth_p"
 Results_dir="results_video/${name}"
 Results_out="results_video/${name}/results"
 # Write_results="results/quantitative/P4s/${name}"
 device=1
 
-CONFIG="configs/v4_reconstruct_img_train.yaml"
-CKPT="models/Paint-by-Example/ID_Landmark_CLIP_reconstruct_img_train/PBE/celebA/2023-10-07T21-09-06_v4_reconstruct_img_train/checkpoints/last.ckpt"
+CONFIG="models/Paint-by-Example_no_grad/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT/PBE/celebA/2024-01-24T13-41-55_v4_reconstruct_img_train_2_step_multi_false/configs/2024-01-24T13-41-55-project.yaml"
+CKPT="models/Paint-by-Example_no_grad/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT/PBE/celebA/2024-01-24T13-41-55_v4_reconstruct_img_train_2_step_multi_false/checkpoints/epoch=000049.ckpt"
 
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"

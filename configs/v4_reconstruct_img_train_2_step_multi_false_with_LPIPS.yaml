@@ -85,7 +85,7 @@ model:
           Reconstruct_initial: True
           Reconstruct_DDIM_steps: 2
           ID_loss_weight: 0.3
-          LPIPS_loss_weight: 0.0
+          LPIPS_loss_weight: 0.1
           Landmark_loss_weight: 0
         
         
@@ -121,7 +121,7 @@ model:
 data:
   target: main_swap.DataModuleFromConfig
   params:
-      batch_size: 4
+      batch_size: 1
       wrap: False
       train:
           target: ldm.data.celebA.CelebAdataset
@@ -152,7 +152,7 @@ data:
               arbitrary_mask_percent: 0.5
               image_size: 512
               gray_outer_mask: True
-              preserve_mask: [1,2,8,9 ,6,7,11,12,17 ]
+              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
 # lightning:
 #   trainer:
 #     max_epochs: 40

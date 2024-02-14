@@ -89,14 +89,17 @@ class VideoDataset(data.Dataset):
         self.args=args
         self.load_prior=False
         self.kernel = np.ones((1, 1), np.uint8)
-
+        self.gray_outer_mask=True
         
         self.Fullmask=False
         self.bbox_path_list=[]
         
         self.data_path=data_path
         self.mask_path=mask_path
+        self.gray_outer_mask=args['gray_outer_mask']
+        self.preserve=args['preserve_mask']
         
+        self.Fullmask=False
         # get all imgs in data_path
         self.imgs = [osp.join(data_path, str(img)+".png") for img in range(len(os.listdir(data_path)))]
         # print(self.imgs)
@@ -110,8 +113,124 @@ class VideoDataset(data.Dataset):
         # image pairs indices
         self.indices = np.arange(len(self.imgs))
         self.length=len(self.indices)
-
+        # self.preserve=preserve
+    
     def __getitem__(self, index):
+        if self.gray_outer_mask:
+            return self.__getitem_gray__(index)
+        else:
+            return self.__getitem_black__(index)
+
+    def __getitem_gray__(self, index):
+        # uses the black mask in reference
+        
+        img_path = self.imgs[index]
+        img_p = Image.open(img_path).convert('RGB').resize((512,512))
+        # if self.img_transform is not None:
+        #     img = self.img_transform(img)
+
+        mask_path = self.labels[index]
+        mask_img = Image.open(mask_path).convert('L')
+        
+        if self.Fullmask:
+            mask_img_full=mask_img
+            mask_img_full=get_tensor(normalize=False, toTensor=True)(mask_img_full)
+        
+        mask_img = np.array(mask_img)  # Convert the label to a NumPy array if it's not already
+
+        # Create a mask to preserve values in the 'preserve' list
+        # preserve = [1,2,4,5,8,9,17 ]
+        # preserve = [1,2,4,5,8,9, 6,7,10,11,12]
+        preserve=self.preserve
+        preserve=[2,3,5,6,7] 
+        mask = np.isin(mask_img, preserve)
+
+        # Create a converted_mask where preserved values are set to 255
+        converted_mask = np.zeros_like(mask_img)
+        converted_mask[mask] = 255
+        # convert to PIL image
+        mask_img=Image.fromarray(converted_mask).convert('L')
+
+   
+
+        ### Get reference
+        # ref_img_path = self.ref_imgs[index]
+        # img_p_np=cv2.imread(ref_img_path)
+        # # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
+        # ref_img = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
+        # # ref_img= cv2.resize(ref_img, (224, 224))
+        
+        # ref_mask_path = self.ref_labels[index]
+        # ref_mask_img = Image.open(ref_mask_path).convert('L')
+        # ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
+
+        # Create a mask to preserve values in the 'preserve' list
+        # preserve = [1,2,4,5,8,9,17 ]
+        # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
+        # preserve=[1,2,4,5,8,9 ,6,7,10,11,12,17 ]
+        # preserve=self.preserve
+        # preserve = [1,2,3,5,6,7,9]
+        # ref_mask= np.isin(ref_mask_img, preserve)
+
+        # # Create a converted_mask where preserved values are set to 255
+        # ref_converted_mask = np.zeros_like(ref_mask_img)
+        # ref_converted_mask[ref_mask] = 255
+        # ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
+        # convert to PIL image
+        
+        
+        # ref_mask_img=Image.fromarray(ref_img).convert('L')
+        
+        
+        # ref_img=self.trans(image=ref_img)
+        # ref_img=Image.fromarray(ref_img["image"])
+        # ref_img=get_tensor_clip()(ref_img)
+        
+        # ref_mask_img_r = ref_converted_mask.resize(ref_img.shape[1::], Image.NEAREST)
+        # ref_mask_img_r = np.array(ref_mask_img_r)
+        # ref_img=ref_img*ref_mask_img_r
+        # ref_img[ref_mask_img_r==0]=0
+        
+        # ref_img=Image.fromarray(ref_img)
+        
+        # ref_img=get_tensor_clip()(ref_img)
+        
+        
+        
+
+
+        ### Crop input image
+        image_tensor = get_tensor()(img_p)
+        W,H = img_p.size
+
+   
+
+        mask_tensor=1-get_tensor(normalize=False, toTensor=True)(mask_img)
+        # reference_mask_tensor=get_tensor(normalize=False, toTensor=True)(ref_converted_mask)
+        inpaint_tensor=image_tensor*mask_tensor
+        
+        # mask_ref=T.Resize((224,224))(reference_mask_tensor)
+   
+        # breakpoint()
+        # ref_img=ref_img*mask_ref   # comment here if you want the full ref img
+        # ref_image_tensor = ref_img.unsqueeze(0)
+        
+        if self.load_prior:
+            prior_img_path = self.prior_images[index]
+            prior_img = Image.open(prior_img_path).convert('RGB').resize((512,512))
+            prior_image_tensor=get_tensor()(prior_img)
+            # prior_image_tensor = prior_img
+        else:
+            prior_image_tensor = image_tensor
+        
+        if self.Fullmask:
+            return image_tensor,prior_image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_img_full,"ref_imgs":ref_image_tensor},str(index).zfill(12)
+    
+        return image_tensor,prior_image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_tensor},str(index).zfill(12)
+        
+        
+    
+    def __getitem_black__(self, index):
         # uses the black mask in reference
         
         img_path = self.imgs[index]
@@ -129,7 +248,7 @@ class VideoDataset(data.Dataset):
 
         # Create a mask to preserve values in the 'preserve' list
         # preserve = [1,2,4,5,8,9,17 ]
-        preserve = [1,2,3,5,6,7,9]  # face parser mapping
+        preserve = [2,3,5,6,7]  # face parser mapping
         mask = np.isin(mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255

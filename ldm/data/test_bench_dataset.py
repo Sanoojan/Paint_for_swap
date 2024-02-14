@@ -40,6 +40,7 @@ celelbAHQ_label_list = ['skin', 'nose', 'eye_g', 'l_eye', 'r_eye',
 # preserve=[1,2,4,5,8,9,17 ] #comes from source
 preserve = [1,2,4,5,8,9, 6,7,10,11,12]
 
+
 faceParser_label_list_detailed = ['background', 'lip', 'eyebrows', 'eyes', 'hair', 
                                     'nose', 'skin', 'ears', 'belowface', 'mouth', 
                                   'eye_glass', 'ear_rings']
@@ -293,7 +294,8 @@ class CelebAdataset(data.Dataset):
         # Create a mask to preserve values in the 'preserve' list
         # preserve = [1,2,4,5,8,9,17 ]
         # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
-        preserve=self.preserve
+        preserve=[1,2,4,5,8,9 ,6,7,10,11,12,13,17 ]
+        # preserve=self.preserve
         # preserve = [1,2,4,5,8,9 ]
         ref_mask= np.isin(ref_mask_img, preserve)
 

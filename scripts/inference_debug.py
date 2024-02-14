@@ -1,6 +1,6 @@
 import argparse, os, sys, glob
 import cv2
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 import torch
 import numpy as np

@@ -16,6 +16,7 @@ from torch import autocast
 from contextlib import contextmanager, nullcontext
 import torchvision
 from ldm.util import instantiate_from_config
+from ldm.models.diffusion.ddim_guided import DDIMSampler as DDIMSampler_guided
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.models.diffusion.plms import PLMSSampler
 
@@ -50,7 +51,7 @@ safety_feature_extractor = AutoFeatureExtractor.from_pretrained(safety_model_id)
 safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
 # set cuda device 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+
 
 
 
@@ -184,6 +185,12 @@ def main():
         help="if enabled, uses the same starting code across samples ",
     )
     parser.add_argument(
+        "--Guidance",
+        action='store_true',
+        default=False,
+        help="Guidance in inference ",
+    )
+    parser.add_argument(
         "--Start_from_target",
         action='store_true',
         help="if enabled, uses the noised target image as the starting ",
@@ -233,7 +240,7 @@ def main():
     parser.add_argument(
         "--n_samples",
         type=int,
-        default=2,
+        default=5,
         help="how many samples to produce for each given prompt. A.k.a. batch size",
     )
     parser.add_argument(
@@ -262,13 +269,13 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/v4_reconstruct_img_train_2_step_multi_false.yaml",
+        default="models/Paint-by-Example/v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS/PBE/celebA/2024-02-05T22-04-36_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS/configs/2024-02-05T22-04-36-project.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="models/Paint-by-Example/v4_reconstruct_img_train_1_step/PBE/celebA/2023-11-30T12-17-55_v4_reconstruct_img_train_2_step_multi_false/checkpoints/last.ckpt",
+        default="models/Paint-by-Example/v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS/PBE/celebA/2024-02-05T22-04-36_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS/checkpoints/last.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(
@@ -291,6 +298,9 @@ def main():
         default="autocast"
     )
     opt = parser.parse_args()
+    
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    
     print(opt)
     if opt.laion400m:
         print("Falling back to LAION 400M model...")
@@ -309,7 +319,10 @@ def main():
     if opt.plms:
         sampler = PLMSSampler(model)
     else:
-        sampler = DDIMSampler(model)
+        if opt.Guidance:
+            sampler = DDIMSampler_guided(model)
+        else:
+            sampler = DDIMSampler(model)
 
     os.makedirs(opt.outdir, exist_ok=True)
     outpath = opt.outdir
@@ -379,8 +392,8 @@ def main():
             with model.ema_scope():
                 all_samples = list()
                 for test_batch,prior, test_model_kwargs,segment_id_batch in test_dataloader:
-                    # sample+=10
-                    # if sample<600:
+                    sample+=10
+                    # if sample<950:
                     #     continue
                     if opt.Start_from_target:
                         
@@ -410,9 +423,13 @@ def main():
                     uc = None
                     if opt.scale != 1.0:
                         uc = model.learnable_vector.repeat(test_batch.shape[0],1,1)
+                        if model.stack_feat:
+                            uc2=model.other_learnable_vector.repeat(test_batch.shape[0],1,1)
+                            uc=torch.cat([uc,uc2],dim=-1)
+                    
                     # c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))
                     landmarks=model.get_landmarks(test_batch) if model.Landmark_cond else None
-                    c=model.conditioning_with_feat(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16),landmarks=landmarks).float()
+                    c=model.conditioning_with_feat(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16),landmarks=landmarks,tar=test_batch).float()
                     if (model.land_mark_id_seperate_layers or model.sep_head_att) and opt.scale != 1.0:
             
                         # concat c, landmarks
@@ -441,7 +458,7 @@ def main():
                                                         unconditional_conditioning=uc,
                                                         eta=opt.ddim_eta,
                                                         x_T=start_code,
-                                                        test_model_kwargs=test_model_kwargs)
+                                                        test_model_kwargs=test_model_kwargs,src_im=test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float32))
 
                     x_samples_ddim = model.decode_first_stage(samples_ddim)
                     x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)

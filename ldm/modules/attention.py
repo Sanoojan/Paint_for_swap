@@ -156,8 +156,8 @@ class CrossAttention(nn.Module):
         context_dim = default(context_dim, query_dim)
 
         self.scale = dim_head ** -0.5
-        self.heads = heads
-        self.dim_head=dim_head
+        self.heads = heads  # 8
+        self.dim_head=dim_head #40
         self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
         # self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
         # self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
@@ -179,8 +179,8 @@ class CrossAttention(nn.Module):
     def forward(self, x, context=None, mask=None):
         h = self.heads
 
-        q = self.to_q(x)
-        context = default(context, x)
+        q = self.to_q(x)        # 2,4096,320
+        context = default(context, x) #2,4096,320
         if context.shape[-1]==768*2:
             # this is for different attention heads
             context1,context2=torch.chunk(context,2,dim=-1) # clip/id context1, landmark context2
