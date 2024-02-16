@@ -36,7 +36,7 @@ from eval_tool.lpips.lpips import LPIPS
 import wandb
 from PIL import Image
 
-from ldm.modules.encoders.modules import FrozenCLIPTextEmbedder
+# from ldm.modules.encoders.modules import FrozenCLIPTextEmbedder
 
 
 __conditioning_keys__ = {'concat': 'c_concat',
@@ -593,7 +593,8 @@ class LatentDiffusion(DDPM):
      
         
         # self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
-        self.proj_out=nn.Linear(1024, 768)
+        # self.proj_out=nn.Linear(1024, 768)
+        self.proj_out=nn.Identity()
         
         self.concat_mode = concat_mode
         self.cond_stage_trainable = cond_stage_trainable
@@ -647,6 +648,10 @@ class LatentDiffusion(DDPM):
                     self.Same_image_reconstruct=cond_stage_config.other_params.Additional_config.Same_image_reconstruct
                 else:
                     self.Same_image_reconstruct=False
+                if hasattr(cond_stage_config.other_params.Additional_config, 'Target_CLIP_feat'):
+                    self.Target_CLIP_feat=cond_stage_config.other_params.Additional_config.Target_CLIP_feat
+                else:
+                    self.Target_CLIP_feat=False
                 if self.concat_feat:
                     self.concat_feat_proj=nn.Linear(768*2+136, 768)
                     # self.concat_feat_proj_out=nn.Linear(768, 768)
@@ -710,7 +715,7 @@ class LatentDiffusion(DDPM):
         self.instantiate_first_stage(first_stage_config)
         self.instantiate_cond_stage(cond_stage_config)
         
-        self.TextEncoder=FrozenCLIPTextEmbedder()
+        # self.TextEncoder=FrozenCLIPTextEmbedder()
         
         self.cond_stage_forward = cond_stage_forward
         self.clip_denoised = False
@@ -861,7 +866,20 @@ class LatentDiffusion(DDPM):
         
         
         if self.clip_weight>0:
-            if tar is not None:
+            if self.Target_CLIP_feat and tar is not None:
+                tar1=tar*1.0
+                tar1=un_norm(tar1)
+                tar1=tar1.to(self.device)
+                tar1=TF.normalize(tar1, mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
+                # resize tar1 to 224
+                tar1=TF.resize(tar1, (224,224))
+                c = self.get_learned_conditioning(tar1) #-->c:[4,1,1024]
+                c = self.proj_out(c) #-->c:[4,1,768]
+                if self.normalize:
+                    norm_coeff=c.norm(dim=2, keepdim=True)
+            
+            
+            elif tar is not None:
                 # tar1=tar*1.0
                 # tar1=un_norm(tar1)
                 # tar1=tar1.to(self.device)
@@ -1607,7 +1625,7 @@ class LatentDiffusion(DDPM):
         #flip references
         if not self.Same_image_reconstruct:
             reference=torch.flip(reference,[0]) # 4,3,224,224
-            cond=self.conditioning_with_feat(reference.to(self.device),landmarks=landmarks).float()
+            cond=self.conditioning_with_feat(reference.to(self.device),landmarks=landmarks,tar=GT_tar).float()
         
         samples_ddim, _ = self.sampler.sample_train(S=ddim_steps,
                                                 conditioning=cond,

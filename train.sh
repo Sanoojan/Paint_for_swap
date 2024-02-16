@@ -7,12 +7,14 @@
 # --base configs/v4_reconstruct_img_train_2_step_multi_false.yaml \
 # --scale_lr False 
 
-CUDA_VISIBLE_DEVICES=2,3 python -u main_swap.py \
---logdir models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image/PBE/celebA/ \
+CUDA_VISIBLE_DEVICES=0,1 python -u main_swap.py \
+--logdir models/Paint-by-Example/Target_CLIP_SRC_ID/PBE/celebA/ \
 --pretrained_model checkpoints/model.ckpt \
---base configs/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image.yaml \
---scale_lr False \
---resume models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image/PBE/celebA/2024-02-13T10-03-50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image/checkpoints/last.ckpt
+--base configs/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS.yaml \
+--scale_lr False 
+
+# \
+# --resume models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image/PBE/celebA/2024-02-13T10-03-50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image/checkpoints/last.ckpt
 
 # \
 # --resume models/Paint-by-Example/v4_reconstruct_SAME_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT/PBE/celebA/2024-02-01T17-18-39_v4_reconstruct_same_img_train_2_step_multi_false/checkpoints/last.ckpt

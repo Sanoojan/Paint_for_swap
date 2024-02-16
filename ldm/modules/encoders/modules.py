@@ -3,7 +3,7 @@ import torch.nn as nn
 from functools import partial
 import clip
 from einops import rearrange, repeat
-from transformers import CLIPTokenizer, CLIPTextModel,CLIPVisionModel,CLIPModel
+from transformers import CLIPTokenizer, CLIPTextModel,CLIPVisionModel,CLIPModel,CLIPProcessor
 import kornia
 from ldm.modules.x_transformer import Encoder, TransformerWrapper  # TODO: can we directly rely on lucidrains code and simply add this as a reuirement? --> test
 from .xf import LayerNorm, Transformer
@@ -204,7 +204,81 @@ class FrozenCLIPTextEmbedder(AbstractEncoder):
 
 
 
+class FrozenCLIPEmbedder(nn.Module):
+    def __init__(self, version="openai/clip-vit-large-patch14"):
+        super().__init__()
+        
+        self.model = CLIPModel.from_pretrained(version)
+        # self.processor = CLIPProcessor.from_pretrained(version)
+        self.tokenizer = CLIPTokenizer.from_pretrained(version)
+        self.final_ln = LayerNorm(1024)
+        self.mapper = Transformer(
+                1,
+                1024,
+                5,
+                1,
+            )
+        self.final_ln2=LayerNorm(768)
+        self.mapper2=Transformer(
+                1,
+                768,
+                5,
+                1,
+            )
+        
+        self.projection_back=nn.Linear(768,1024)
 
+        self.freeze()
+
+    def freeze(self):
+        self.model = self.model.eval()
+        # self.processor = self.processor.eval()
+        for param in self.parameters():
+            param.requires_grad = False
+        # for param in self.mapper.parameters():
+        #     param.requires_grad = True
+        # for param in self.final_ln.parameters():
+        #     param.requires_grad = True
+        # for param in self.projection_back.parameters():
+        #     param.requires_grad = True
+        for param in self.mapper2.parameters():
+            param.requires_grad = True
+        for param in self.final_ln2.parameters():
+            param.requires_grad = True
+
+    def forward(self, image):
+        outputs = self.model.vision_model(pixel_values=image)
+        z = outputs.pooler_output
+        z=self.model.visual_projection(z)
+        # z=self.projection_back(z)
+        z = z.unsqueeze(1)
+        z = self.mapper2(z)
+        z = self.final_ln2(z)
+        return z
+
+    def encode(self, image):
+        return self(image)
+    
+    def forward_probabilities(self, text, image):
+        vision_outputs=self.model.vision_model(pixel_values=image)
+        image_embeds = vision_outputs[1]
+        image_embeds = self.model.visual_projection(image_embeds)
+        
+        inputs= self.tokenizer(text, padding=True, return_tensors="pt")
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        text_outputs = self.model.text_model(**inputs)
+        text_embeds = text_outputs[1]
+        text_embeds = self.text_projection(text_embeds)
+        # normalized features
+        image_embeds = image_embeds / image_embeds.norm(dim=-1, keepdim=True)
+        text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
+
+        # cosine similarity as logits
+        logit_scale = self.logit_scale.exp()
+        logits_per_text = torch.matmul(text_embeds, image_embeds.t()) * logit_scale
+        logits_per_image = logits_per_text.T
+        
+        return logits_per_image
 
 if __name__ == "__main__":
     from ldm.util import count_params

@@ -70,7 +70,7 @@ model:
           target: torch.nn.Identity
 
     cond_stage_config:
-      target: ldm.modules.encoders.modules.FrozenCLIPImageEmbedder
+      target: ldm.modules.encoders.modules.FrozenCLIPEmbedder
       other_params:
         clip_weight: 1.0
         ID_weight: 10.0
@@ -83,6 +83,7 @@ model:
         sep_head_att: False
         Additional_config:
           Reconstruct_initial: True
+          Target_CLIP_feat: True
           Reconstruct_DDIM_steps: 2
           ID_loss_weight: 0.3
           LPIPS_loss_weight: 0.1
@@ -127,23 +128,25 @@ data:
           target: ldm.data.celebA.CelebAdataset
           params:
               state: train
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
+              dataset_dir: dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
               gray_outer_mask: True
-              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
+              remove_mask_tar: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
+              preserve_mask_src: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
 
       validation:
           target: ldm.data.celebA.CelebAdataset
           params:
               state: validation
-              dataset_dir: /home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/
+              dataset_dir: dataset/FaceData/CelebAMask-HQ/
               arbitrary_mask_percent: 0.5
               image_size: 512
               data_seed: 0
               gray_outer_mask: True
-              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
+              remove_mask_tar: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
+              preserve_mask_src: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
       test:
           target: ldm.data.celebA.CelebAdataset
           params:
@@ -152,17 +155,20 @@ data:
               arbitrary_mask_percent: 0.5
               image_size: 512
               gray_outer_mask: True
-              preserve_mask: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
+              remove_mask_tar: [1,2,4,5,8,9 ,6,7,10,11,12,17 ]
+              preserve_mask_src: [1,2,4,5,8,9 ,6,7,10,11,12,13,17 ]
 # lightning:
 #   trainer:
 #     max_epochs: 40
 #     num_nodes: 1
 #     accelerator: 'gpu'
 #     gpus: "0,1,2,3,4,5,6,7"
+# 1:skin, 2:nose, 3:eye_g, 4:l_eye, 5:r_eye, 6:l_brow, 7:r_brow, 8:l_ear, 9:r_ear, 
+# 10:mouth, 11:u_lip, 12:l_lip, 13:hair, 14:hat, 15:ear_r, 16:neck_l, 17:neck, 18:cloth
 
 lightning:
   trainer:
-    max_epochs: 60
+    max_epochs: 15
     num_nodes: 1
     accelerator: 'gpu'
     gpus: "0,1"

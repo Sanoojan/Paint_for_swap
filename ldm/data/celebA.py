@@ -398,12 +398,11 @@ class CelebAdataset(data.Dataset):
             ])
         
         self.gray_outer_mask=args['gray_outer_mask']
-        self.preserve=args['preserve_mask']
+        # self.preserve=args['preserve_mask']
+        self.preserve=args['preserve_mask_src']
+        self.remove_tar=args['remove_mask_tar']
+        self.preserve_src=args['preserve_mask_src']
         
-        
-        # print("gray_outer_mask",self.gray_outer_mask)
-        # print("preserve_mask",self.preserve)
-        # print("..........................................")
         
         self.Fullmask=False
         
