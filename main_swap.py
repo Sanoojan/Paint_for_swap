@@ -511,9 +511,16 @@ if __name__ == "__main__":
     trainer_config["accelerator"] = "ddp"
     for k in nondefault_trainer_args(opt):
         trainer_config[k] = getattr(opt, k)
-    if not "gpus" in trainer_config:
+    if not "gpus" in trainer_config and not "devices" in trainer_config:
         del trainer_config["accelerator"]
         cpu = True
+    elif "devices" in trainer_config:
+        print("Using devices:", trainer_config["devices"])
+        print("using nodes:", trainer_config["num_nodes"])
+        trainer_config["accelerator"] = "gpu"
+        trainer_config["strategy"] = "ddp"
+        trainer_config["gpus"] = "0, 1, 2, 3"
+        cpu = False
     else:
         gpuinfo = trainer_config["gpus"]
         print(f"Running on GPUs {gpuinfo}")

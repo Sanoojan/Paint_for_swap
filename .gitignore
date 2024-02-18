@@ -37,3 +37,7 @@ Other_dependencies/arcface/model_ir_se50.pth
 inference_test_bench.sh
 train.sh
 inference_test_bench_154.sh
+eval_tool/eval_tool/clip_score/test_bench_dataset.py
+Other_dependencies/FECNet/FECNet.pt
+data/*
+
