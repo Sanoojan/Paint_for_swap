@@ -148,7 +148,15 @@ class CelebAdataset(data.Dataset):
             A.Resize(height=224,width=224)])
         
         self.gray_outer_mask=args['gray_outer_mask']
-        self.preserve=args['preserve_mask']
+        
+        if hasattr(args, 'preserve_mask'):
+            self.preserve=args['preserve_mask']
+            self.remove_tar=args['preserve_mask']
+            self.preserve_src=args['preserve_mask']
+        else:
+            self.preserve=args['preserve_mask_src']
+            self.remove_tar=args['remove_mask_tar']
+            self.preserve_src=args['preserve_mask_src']
         
         self.Fullmask=False
         self.bbox_path_list=[]
@@ -185,7 +193,7 @@ class CelebAdataset(data.Dataset):
             # intermediate_results_261/results/000000028000.jpg
             if self.load_prior:
                 # self.prior_images=sorted([osp.join("intermediate_results_261/results", "0000000%d.jpg"%idx) for idx in range(28000, 29000)])
-                self.prior_images=sorted([osp.join("/home/sanoojan/e4s/Results/testbench/reenact/results", "%d.png"%idx) for idx in range(29000, 30000)])
+                self.prior_images=sorted([osp.join("intermediate_renact/results_2", "%d.jpg"%idx) for idx in range(28000, 29000)])
         self.imgs= self.imgs[:int(len(self.imgs)*self.fraction)]
         self.labels= self.labels[:int(len(self.labels)*self.fraction)]
         self.labels_vis= self.labels_vis[:int(len(self.labels_vis)*self.fraction)]  if self.load_vis_img else None
@@ -269,7 +277,7 @@ class CelebAdataset(data.Dataset):
         # Create a mask to preserve values in the 'preserve' list
         # preserve = [1,2,4,5,8,9,17 ]
         # preserve = [1,2,4,5,8,9, 6,7,10,11,12]
-        preserve=self.preserve
+        preserve=self.remove_tar
         mask = np.isin(mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255
@@ -294,7 +302,8 @@ class CelebAdataset(data.Dataset):
         # Create a mask to preserve values in the 'preserve' list
         # preserve = [1,2,4,5,8,9,17 ]
         # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
-        preserve=[1,2,4,5,8,9 ,6,7,10,11,12,13,17 ]
+        # preserve=[1,2,4,5,8,9 ,6,7,10,11,12,13,17 ]
+        preserve=self.preserve_src
         # preserve=self.preserve
         # preserve = [1,2,4,5,8,9 ]
         ref_mask= np.isin(ref_mask_img, preserve)
