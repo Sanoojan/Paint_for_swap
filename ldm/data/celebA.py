@@ -399,9 +399,14 @@ class CelebAdataset(data.Dataset):
         
         self.gray_outer_mask=args['gray_outer_mask']
         # self.preserve=args['preserve_mask']
-        self.preserve=args['preserve_mask_src']
-        self.remove_tar=args['remove_mask_tar']
-        self.preserve_src=args['preserve_mask_src']
+        if hasattr(args, 'preserve_mask'):
+            self.preserve=args['preserve_mask']
+            self.remove_tar=args['preserve_mask']
+            self.preserve_src=args['preserve_mask']
+        else:
+            self.preserve=args['preserve_mask_src']
+            self.remove_tar=args['remove_mask_tar']
+            self.preserve_src=args['preserve_mask_src']
         
         
         self.Fullmask=False
