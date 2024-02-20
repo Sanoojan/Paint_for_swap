@@ -21,6 +21,8 @@ Results_out="/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_
 # Results_out="results_grad/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_DDIM/results"
 # Results_out="results_new/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_49/results"
 # Results_out="results_grad/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep10/results"
+Results_out="results_grad/Target_CLIP_SRC_ID_ep11_no_hair/results"
+
 
 Write_results="results/Debug/with_grad_trained"
 
@@ -30,7 +32,7 @@ Write_results="results/Debug/with_grad_trained"
 # Results_out="/home/sanoojan/e4s/Results/testbench/results_CelebA_ckpt_without_crop"
 # Write_results="results/quantitative/P4s/${name}"
 # Write_results="results/quantitative/P4s/check-target_id"
-device=1
+device=2
 
 CONFIG="configs/v3_Landmark_cond.yaml"
 CKPT="models/Paint-by-Example/Arcface_features_clip_avg_landmarks_full_face_mask_new_augs/PBE/celebA/2023-10-04T10-53-42_v3_Landmark_cond/checkpoints/last.ckpt"
@@ -68,11 +70,11 @@ fi
 #     "${target_path}" \
 #     "${Results_out}"  >> "$output_filename"
 
-# echo "Expression comarison with target:"
-CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_face_recon.py --device cuda \
-    "${target_path}" \
-    "${Results_out}" \
-    --print_sim True  >> "$output_filename"
+# # echo "Expression comarison with target:"
+# CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_face_recon.py --device cuda \
+#     "${target_path}" \
+#     "${Results_out}" \
+#     --print_sim True  >> "$output_filename"
 
 
 # echo "ID similarity with Target:"
@@ -88,9 +90,11 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_fa
 #     --gt_folder "${source_path}" >> "$output_filename"  
 
 # echo "ID similarity with Source:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
-#     "${source_path}" \
-#     "${Results_out}" \
-#     "${source_mask_path}" \
-#     "${target_mask_path}"  \
-#     --print_sim True  >> "$output_filename"  
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+    "${source_path}" \
+    "${Results_out}" \
+    "${source_mask_path}" \
+    "${target_mask_path}"  \
+    --print_sim False  
+    
+    # >> "$output_filename"  

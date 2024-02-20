@@ -1,13 +1,14 @@
 
 # Set variables
-name="v4_reconstruct_img_train_with_DIFT_prior_700"
+name="Tar_CLIP_SRC_ID_CelebA_trained"
 Results_dir="results_FFHQ/${name}"
 Results_out="results_FFHQ/${name}/results"
 Write_results="results_FFHQ/quantitative/P4s/${name}"
 device=2
 
-CONFIG="configs/v4_reconstruct_img_train_ffhq.yaml"
-CKPT="models/Paint-by-Example/ID_Landmark_CLIP_reconstruct_img_train/PBE/celebA/2023-10-07T21-09-06_v4_reconstruct_img_train/checkpoints/last.ckpt"
+
+CONFIG="models_from_CIAI/FFHQ/Target_CLIP_SRC_ID/configs/project.yaml"
+CKPT="models/Paint-by-Example/Target_CLIP_SRC_ID/PBE/celebA/2024-02-15T04-28-52_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS/checkpoints/last.ckpt"
 source_path="dataset/FaceData/FFHQ/Val"
 target_path="dataset/FaceData/FFHQ/Val_target"
 source_mask_path="dataset/FaceData/FFHQ/src_mask"
@@ -26,15 +27,19 @@ fi
 
 # Run inference
 
-CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
-    --plms \
+python scripts/inference_test_bench.py \
     --outdir "${Results_dir}" \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 5 \
+    --n_samples 15 \
+    --device_ID ${device} \
     --dataset "FFHQ" \
-    --target_start_noise_t 700 \
-    --Start_from_target  
+    --ddim_steps 50
+
+
+    # --target_start_noise_t 700 \
+    # --Start_from_target  
 
 
 echo "FID score with Source:"

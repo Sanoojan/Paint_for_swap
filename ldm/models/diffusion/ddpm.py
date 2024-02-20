@@ -593,8 +593,13 @@ class LatentDiffusion(DDPM):
      
         
         # self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
-        # self.proj_out=nn.Linear(1024, 768)
-        self.proj_out=nn.Identity()
+        
+        if cond_stage_config.target=="FrozenCLIPImageEmbedder":
+            print("Using FrozenCLIPImageEmbedder")
+            self.proj_out=nn.Linear(1024, 768)
+        elif cond_stage_config.target=="FrozenCLIPEmbedder":
+            print("Using FrozenCLIPEmbedder")
+            self.proj_out=nn.Identity()
         
         self.concat_mode = concat_mode
         self.cond_stage_trainable = cond_stage_trainable

@@ -187,7 +187,6 @@ def main():
     parser.add_argument(
         "--Guidance",
         action='store_true',
-        default=False,
         help="Guidance in inference ",
     )
     parser.add_argument(
@@ -372,7 +371,7 @@ def main():
                                         num_workers=4, 
                                         pin_memory=True, 
                                         shuffle=False,#sampler=train_sampler, 
-                                        drop_last=True)
+                                        drop_last=False)
 
 
 
@@ -393,7 +392,7 @@ def main():
                 all_samples = list()
                 for test_batch,prior, test_model_kwargs,segment_id_batch in test_dataloader:
                     sample+=10
-                    # if sample<950:
+                    # if sample<550:
                     #     continue
                     if opt.Start_from_target:
                         

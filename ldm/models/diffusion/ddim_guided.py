@@ -300,7 +300,7 @@ class DDIMSampler(object):
             seperate_sim=None
             # src_im=None
             if src_im is not None:
-                pred_x0_im=self.model.differentiable_decode_first_stage(pred_x0)
+                pred_x0_im=self.model.decode_first_stage(pred_x0)
                 masks=1-TF.resize(x_in[:,8,:,:],(pred_x0_im.shape[2],pred_x0_im.shape[3]))
                 #mask x_samples_ddim
                 pred_x0_im_masked=pred_x0_im*masks.unsqueeze(1)
@@ -308,6 +308,7 @@ class DDIMSampler(object):
                 # x_samples_ddim_masked = TF.normalize(x_samples_ddim_masked, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
                 
                 ID_loss,_,seperate_sim=self.model.face_ID_model(pred_x0_im_masked,src_im,clip_img=False,return_seperate=True)
+                # breakpoint()
                 grad=torch.autograd.grad(-1*ID_loss, x_in)[0]
                 grad=grad*5.0
                 grad=grad[:,:4,:,:].detach()

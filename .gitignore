@@ -41,3 +41,4 @@ eval_tool/eval_tool/clip_score/test_bench_dataset.py
 Other_dependencies/FECNet/FECNet.pt
 data/*
 
+models_from_CIAI/*

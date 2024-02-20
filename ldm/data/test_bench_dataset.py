@@ -462,8 +462,9 @@ class FFHQdataset(data.Dataset):
         self.load_vis_img=load_vis_img
         self.state=state
         self.args=args
-        self.load_prior=True
+        self.load_prior=False
         self.kernel = np.ones((1, 1), np.uint8)
+        self.Fullmask=False
         self.random_trans=A.Compose([
             A.Resize(height=224,width=224),
             A.HorizontalFlip(p=0.5),
@@ -475,6 +476,18 @@ class FFHQdataset(data.Dataset):
             A.Resize(height=224,width=224)])
         
         self.bbox_path_list=[]
+        
+        self.gray_outer_mask=args['gray_outer_mask']
+        
+        if hasattr(args, 'preserve_mask'):
+            self.preserve=args['preserve_mask']
+            self.remove_tar=args['preserve_mask']
+            self.preserve_src=args['preserve_mask']
+        else:
+            self.preserve=args['preserve_mask_src']
+            self.remove_tar=args['remove_mask_tar']
+            self.preserve_src=args['preserve_mask_src']
+        
         if state == "train":
             self.imgs = sorted([osp.join(args['dataset_dir'], "images512", '{0:0=5d}.png'.format(idx)) for idx in range(68000)])
             self.labels = sorted([osp.join(args['dataset_dir'], "BiSeNet_mask",'{0:0=5d}.png'.format(idx))  for idx in range(68000)])
@@ -512,121 +525,33 @@ class FFHQdataset(data.Dataset):
 
     
     
-    # def __getitem__(self, index):
-    #     # uses the gray mask in reference
-        
-    #     img_path = self.imgs[index]
-    #     img_p = Image.open(img_path).convert('RGB').resize((512,512))
-    #     # if self.img_transform is not None:
-    #     #     img = self.img_transform(img)
-
-    #     mask_path = self.labels[index]
-    #     mask_img = Image.open(mask_path).convert('L')
-    #     mask_img = np.array(mask_img)  # Convert the label to a NumPy array if it's not already
-
-    #     # Create a mask to preserve values in the 'preserve' list
-    #     # preserve = [1,2,4,5,8,9,17 ]
-    #     preserve = [1,2,4,5,8,9, 6,7,10,11,12]
-    #     mask = np.isin(mask_img, preserve)
-
-    #     # Create a converted_mask where preserved values are set to 255
-    #     converted_mask = np.zeros_like(mask_img)
-    #     converted_mask[mask] = 255
-    #     # convert to PIL image
-    #     mask_img=Image.fromarray(converted_mask).convert('L')
-
-
-
-    #     ### Get reference
-    #     ref_img_path = self.ref_imgs[index]
-    #     img_p_np=cv2.imread(ref_img_path)
-    #     # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
-    #     ref_img = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
-    #     # ref_img= cv2.resize(ref_img, (224, 224))
-        
-    #     ref_mask_path = self.ref_labels[index]
-    #     ref_mask_img = Image.open(ref_mask_path).convert('L')
-    #     ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
-
-    #     # Create a mask to preserve values in the 'preserve' list
-    #     # preserve = [1,2,4,5,8,9,17 ]
-    #     preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
-    #     # preserve = [1,2,4,5,8,9 ]
-    #     ref_mask= np.isin(ref_mask_img, preserve)
-
-    #     # Create a converted_mask where preserved values are set to 255
-    #     ref_converted_mask = np.zeros_like(ref_mask_img)
-    #     ref_converted_mask[ref_mask] = 255
-    #     ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
-    #     # convert to PIL image
-        
-        
-    #     # ref_mask_img=Image.fromarray(ref_img).convert('L')
-        
-        
-    #     ref_img=self.trans(image=ref_img)
-    #     ref_img=Image.fromarray(ref_img["image"])
-    #     ref_img=get_tensor_clip()(ref_img)
-        
-    #     # ref_mask_img_r = ref_converted_mask.resize(ref_img.shape[1::], Image.NEAREST)
-    #     # ref_mask_img_r = np.array(ref_mask_img_r)
-    #     # ref_img=ref_img*ref_mask_img_r
-    #     # ref_img[ref_mask_img_r==0]=0
-        
-    #     # ref_img=Image.fromarray(ref_img)
-        
-    #     # ref_img=get_tensor_clip()(ref_img)
-        
-        
-        
-
-
-    #     ### Crop input image
-    #     image_tensor = get_tensor()(img_p)
-    #     W,H = img_p.size
-
-
-
-    #     mask_tensor=1-get_tensor(normalize=False, toTensor=True)(mask_img)
-    #     reference_mask_tensor=get_tensor(normalize=False, toTensor=True)(ref_converted_mask)
-    #     inpaint_tensor=image_tensor*mask_tensor
-        
-    #     mask_ref=T.Resize((224,224))(reference_mask_tensor)
-
-    #     # breakpoint()
-    #     ref_img=ref_img*mask_ref
-    #     ref_image_tensor = ref_img.unsqueeze(0)
-        
-    #     if self.load_prior:
-    #         prior_img_path = self.prior_images[index]
-    #         prior_img = Image.open(prior_img_path).convert('RGB').resize((512,512))
-    #         prior_image_tensor=get_tensor()(prior_img)
-    #         # prior_image_tensor = prior_img
-    #     else:
-    #         prior_image_tensor = None
-            
-    #     # if self.Fullmask:
-    #     #     return {"GT":image_tensor_resize,"inpaint_image":inpaint_tensor_resize,"inpaint_mask":mask_img_full,"ref_imgs":ref_image_tensor}
-    
-    #     return image_tensor,prior_image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_tensor,"ref_imgs":ref_image_tensor},str(index).zfill(12)
-        
-        
-    
     def __getitem__(self, index):
-        # uses the black mask in reference
+        if self.gray_outer_mask:
+            return self.__getitem_gray__(index)
+        else:
+            return self.__getitem_black__(index)
+    
+    def __getitem_gray__(self, index):
+        # uses the gray mask in reference
         
         img_path = self.imgs[index]
         img_p = Image.open(img_path).convert('RGB').resize((512,512))
-
+        # if self.img_transform is not None:
+        #     img = self.img_transform(img)
 
         mask_path = self.labels[index]
-        mask_img = Image.open(mask_path).convert('L').resize((512,512))
+        mask_img = Image.open(mask_path).convert('L')
+        
+        if self.Fullmask:
+            mask_img_full=mask_img
+            mask_img_full=get_tensor(normalize=False, toTensor=True)(mask_img_full)
+        
         mask_img = np.array(mask_img)  # Convert the label to a NumPy array if it's not already
 
         # Create a mask to preserve values in the 'preserve' list
-        
-        preserve = [1,2,3,5,6,7,9] #FFHQ
-        
+        # preserve = [1,2,4,5,8,9,17 ]
+        # preserve = [1,2,4,5,8,9, 6,7,10,11,12]
+        preserve=self.remove_tar
         mask = np.isin(mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255
@@ -634,8 +559,7 @@ class FFHQdataset(data.Dataset):
         converted_mask[mask] = 255
         # convert to PIL image
         mask_img=Image.fromarray(converted_mask).convert('L')
-
-
+        
 
         ### Get reference
         ref_img_path = self.ref_imgs[index]
@@ -649,7 +573,12 @@ class FFHQdataset(data.Dataset):
         ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
 
         # Create a mask to preserve values in the 'preserve' list
-        preserve = [1,2,3,5,6,7,9] #FFHQ
+        # preserve = [1,2,4,5,8,9,17 ]
+        # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
+        # preserve=[1,2,4,5,8,9 ,6,7,10,11,12,13,17 ]
+        preserve=self.preserve_src
+        # preserve=self.preserve
+        # preserve = [1,2,4,5,8,9 ]
         ref_mask= np.isin(ref_mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255
@@ -659,16 +588,22 @@ class FFHQdataset(data.Dataset):
         # convert to PIL image
         
         
-        ref_mask_img=Image.fromarray(ref_img).convert('L')
-        ref_mask_img_r = ref_converted_mask.resize(img_p_np.shape[1::-1], Image.NEAREST)
-        ref_mask_img_r = np.array(ref_mask_img_r)
-        ref_img[ref_mask_img_r==0]=0
+        # ref_mask_img=Image.fromarray(ref_img).convert('L')
+        
         
         ref_img=self.trans(image=ref_img)
         ref_img=Image.fromarray(ref_img["image"])
         ref_img=get_tensor_clip()(ref_img)
         
-        ref_image_tensor = ref_img.unsqueeze(0)
+        # ref_mask_img_r = ref_converted_mask.resize(ref_img.shape[1::], Image.NEAREST)
+        # ref_mask_img_r = np.array(ref_mask_img_r)
+        # ref_img=ref_img*ref_mask_img_r
+        # ref_img[ref_mask_img_r==0]=0
+        
+        # ref_img=Image.fromarray(ref_img)
+        
+        # ref_img=get_tensor_clip()(ref_img)
+        
         
         
 
@@ -677,11 +612,17 @@ class FFHQdataset(data.Dataset):
         image_tensor = get_tensor()(img_p)
         W,H = img_p.size
 
-
+   
 
         mask_tensor=1-get_tensor(normalize=False, toTensor=True)(mask_img)
-
+        reference_mask_tensor=get_tensor(normalize=False, toTensor=True)(ref_converted_mask)
         inpaint_tensor=image_tensor*mask_tensor
+        
+        mask_ref=T.Resize((224,224))(reference_mask_tensor)
+   
+        
+        ref_img=ref_img*mask_ref   # comment here if you want the full ref img
+        ref_image_tensor = ref_img.unsqueeze(0)
         
         if self.load_prior:
             prior_img_path = self.prior_images[index]
@@ -690,9 +631,13 @@ class FFHQdataset(data.Dataset):
             # prior_image_tensor = prior_img
         else:
             prior_image_tensor = image_tensor
-    
-        return image_tensor,prior_image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_tensor,"ref_imgs":ref_image_tensor},str(index).zfill(12)
+        
+        if self.Fullmask:
+            return image_tensor,prior_image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_img_full,"ref_imgs":ref_image_tensor},str(index).zfill(12)
 
+        
+        return image_tensor,prior_image_tensor, {"inpaint_image":inpaint_tensor,"inpaint_mask":mask_tensor,"ref_imgs":ref_image_tensor},str(index).zfill(12)
+        
 
     def __len__(self):
         return self.length
@@ -720,6 +665,16 @@ class FFdataset(data.Dataset):
             A.Resize(height=224,width=224)])
         
         self.bbox_path_list=[]
+        
+        if hasattr(args, 'preserve_mask'):
+            self.preserve=args['preserve_mask']
+            self.remove_tar=args['preserve_mask']
+            self.preserve_src=args['preserve_mask']
+        else:
+            self.preserve=args['preserve_mask_src']
+            self.remove_tar=args['remove_mask_tar']
+            self.preserve_src=args['preserve_mask_src']
+        
         if state == "train":
             self.imgs = sorted([osp.join(args['dataset_dir'], "images512", '{0:0=5d}.png'.format(idx)) for idx in range(68000)])
             self.labels = sorted([osp.join(args['dataset_dir'], "BiSeNet_mask",'{0:0=5d}.png'.format(idx))  for idx in range(68000)])
