@@ -35,6 +35,19 @@ import dlib
 from eval_tool.lpips.lpips import LPIPS
 import wandb
 from PIL import Image
+import argparse
+# from eval_tool.Deep3DFaceRecon_pytorch.models.facerecon_model import FaceReconModel
+
+
+
+from eval_tool.Deep3DFaceRecon_pytorch.options.test_options import TestOptions
+
+# give empty string to use the default options
+dmm_defaults = TestOptions('')
+
+dmm_defaults=dmm_defaults.parse()
+
+from eval_tool.Deep3DFaceRecon_pytorch.models import create_model
 
 # from ldm.modules.encoders.modules import FrozenCLIPTextEmbedder
 
@@ -82,6 +95,15 @@ def save_clip_img(img, path,clip=True):
     # else:  
     #     img=TF.normalize(img, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 
+# class FaceRecon(nn.module):
+#     def __init__(self,opts=None):
+#         super(FaceRecon, self).__init__()
+#         # self.opts = opts
+#         # self.model = create_model(opts)
+#         # self.model.setup(opts)
+#         # self.model.eval()
+#         # self.set_requires_grad(False)
+#         self.model=FaceReconModel()
 
 class IDLoss(nn.Module):
     def __init__(self,opts,multiscale=False):
@@ -657,6 +679,10 @@ class LatentDiffusion(DDPM):
                     self.Target_CLIP_feat=cond_stage_config.other_params.Additional_config.Target_CLIP_feat
                 else:
                     self.Target_CLIP_feat=False
+                if hasattr(cond_stage_config.other_params.Additional_config, 'use_3dmm'):  
+                    self.use_3dmm=cond_stage_config.other_params.Additional_config.use_3dmm
+                else:
+                    self.use_3dmm=False
                 if self.concat_feat:
                     self.concat_feat_proj=nn.Linear(768*2+136, 768)
                     # self.concat_feat_proj_out=nn.Linear(768, 768)
@@ -708,7 +734,16 @@ class LatentDiffusion(DDPM):
         # self.train_reduce_steps = (self.hparams.epochs * self.train_batches) // (self.hparams.accumulate_grad_batches * 2) # for half of the time full trining with ID
         # self.change_weights=2/self.train_steps
         self.total_steps_in_epoch=0 # will be calculated inside training_step. Not known for now
-        
+                
+        if self.use_3dmm:
+            self.models_3dmm = create_model(dmm_defaults)
+            self.models_3dmm.setup(dmm_defaults)
+            
+            if torch.cuda.is_available():
+                self.models_3dmm.net_recon.cuda()
+            #     self.models_3dmm.facemodel.to("cuda")
+            self.models_3dmm.eval() 
+            self.dmm_proj_out=nn.Linear(257, 768)
         try:
             self.num_downs = len(first_stage_config.params.ddconfig.ch_mult) - 1
         except:
@@ -871,7 +906,37 @@ class LatentDiffusion(DDPM):
         
         
         if self.clip_weight>0:
-            if self.Target_CLIP_feat and tar is not None:
+            
+            if self.use_3dmm and tar is None:
+
+
+                
+                self.models_3dmm.net_recon=self.models_3dmm.net_recon.to(x.device)
+                c=self.models_3dmm.net_recon(x)
+                c=self.dmm_proj_out(c)
+                c=c.unsqueeze(1)
+            elif self.use_3dmm and tar is not None:
+                c_source=self.models_3dmm.net_recon(x)
+                # c_src=self.dmm_proj_out(c_src)
+                # c_src=c_src.unsqueeze(1)
+                c=self.models_3dmm.net_recon(tar)
+                # c_tar=self.dmm_proj_out(c_tar)
+                # c_tar=c_tar.unsqueeze(1)
+                c[:, :80]=c_source[:, :80]
+                c=self.dmm_proj_out(c)
+                c=c.unsqueeze(1)
+        #         facemodel.split_coeff(output_coeff)
+        #         id_coeffs = coeffs[:, :80]
+        # exp_coeffs = coeffs[:, 80: 144]
+        # tex_coeffs = coeffs[:, 144: 224]
+        # angles = coeffs[:, 224: 227]
+        # gammas = coeffs[:, 227: 254]
+        # translations = coeffs[:, 254:]
+                
+                
+                # c_src = self.proj_out(c_src)
+            
+            elif self.Target_CLIP_feat and tar is not None:
                 tar1=tar*1.0
                 tar1=un_norm(tar1)
                 tar1=tar1.to(self.device)

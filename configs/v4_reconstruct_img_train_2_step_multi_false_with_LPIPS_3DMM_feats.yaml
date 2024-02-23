@@ -172,4 +172,4 @@ lightning:
     max_epochs: 15
     num_nodes: 1
     accelerator: 'gpu'
-    gpus: "0"
+    gpus: "0,1"

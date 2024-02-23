@@ -392,7 +392,7 @@ def main():
                 all_samples = list()
                 for test_batch,prior, test_model_kwargs,segment_id_batch in test_dataloader:
                     sample+=10
-                    # if sample<550:
+                    # if sample<930:
                     #     continue
                     if opt.Start_from_target:
                         
@@ -428,7 +428,7 @@ def main():
                     
                     # c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))
                     landmarks=model.get_landmarks(test_batch) if model.Landmark_cond else None
-                    c=model.conditioning_with_feat(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16),landmarks=landmarks,tar=test_batch).float()
+                    c=model.conditioning_with_feat(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16),landmarks=landmarks,tar=test_batch.to("cuda").to(torch.float16)).float()
                     if (model.land_mark_id_seperate_layers or model.sep_head_att) and opt.scale != 1.0:
             
                         # concat c, landmarks

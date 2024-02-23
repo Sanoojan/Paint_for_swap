@@ -187,6 +187,11 @@ class CelebAdataset(data.Dataset):
             # self.ref_labels =  sorted([osp.join(ref_img_mask_path, "%d.png"%idx) for idx in range(29000, 30000)]) 
             self.ref_abels_vis =  sorted([osp.join(args['dataset_dir'], "vis", "%d.png"%idx) for idx in range(29000, 30000)]) if self.load_vis_img else None
 
+
+            # self.ref_imgs = sorted([osp.join(args['dataset_dir'], "CelebA-HQ-img", "%d.jpg"%idx) for idx in range(28000, 29000)])
+            # self.ref_labels =  sorted([osp.join(args['dataset_dir'], "CelebA-HQ-mask/Overall_mask", "%d.png"%idx) for idx in range(28000, 29000)]) 
+            # self.ref_abels_vis =  sorted([osp.join(args['dataset_dir'], "vis", "%d.png"%idx) for idx in range(28000, 29000)]) if self.load_vis_img else None
+
             self.ref_imgs= self.ref_imgs[:int(len(self.imgs)*self.fraction)]
             self.ref_labels= self.ref_labels[:int(len(self.labels)*self.fraction)]
             self.ref_labels_vis= self.ref_labels_vis[:int(len(self.labels_vis)*self.fraction)]  if self.load_vis_img else None

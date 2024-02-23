@@ -1,18 +1,22 @@
 
 # Set variables
-name="v4_img_train_2_step_multi_false"
-Results_dir="results/${name}"
-Results_out="results/${name}/results"
-Write_results="results/quantitative/P4s/${name}"
-device=0
+name="SRC_CLIP_SRC_ID_partial"
+Results_dir="results_grad/${name}"
+Results_out="results_grad/${name}/results"
+Write_results="Quantitative_grad/P4s/${name}"
+device=2
 
-CONFIG="models/Paint-by-Example/v4_reconstruct_img_train_1_step/PBE/celebA/2023-11-30T12-17-55_v4_reconstruct_img_train_2_step_multi_false/configs/2023-11-30T12-17-55-project.yaml"
-CKPT="models/Paint-by-Example/v4_reconstruct_img_train_1_step/PBE/celebA/2023-11-30T12-17-55_v4_reconstruct_img_train_2_step_multi_false/checkpoints/last.ckpt"
+CONFIG="models_from_114/CelebA/SRC_CLIP_SRC_ID/configs/project.yaml"
+CKPT="models_from_114/CelebA/SRC_CLIP_SRC_ID/checkpoints/epoch=000017.ckpt"
+
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
 target_mask_path="dataset/FaceData/CelebAMask-HQ/target_mask"
 Dataset_path="dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img"
+
+# source_path="dataset/FaceData/CelebAMask-HQ/Val_target"
+# source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
 
 current_time=$(date +"%Y%m%d_%H%M%S")
 output_filename="${Write_results}/out_${current_time}.txt"
@@ -26,14 +30,17 @@ fi
 
 # Run inference
 
-CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
+python scripts/inference_test_bench.py \
     --outdir "${Results_dir}" \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 5 \
-    --dataset "CelebA" 
-    
-    # --Start_from_target \
+    --n_samples 15 \
+    --device_ID ${device} \
+    --dataset "CelebA" \
+    --ddim_steps 50
+
+    # --Start_from_target 
     # --target_start_noise_t 800  
     
 
@@ -53,6 +60,10 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cu
     "${target_path}" \
     "${Results_out}"  >> "$output_filename"
 
+echo "Expression comarison with target:"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_face_recon.py --device cuda \
+    "${target_path}" \
+    "${Results_out}"  >> "$output_filename"
 
 echo "ID similarity with Target:"
 CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
@@ -71,5 +82,6 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --d
     "${source_path}" \
     "${Results_out}" \
     "${source_mask_path}" \
-    "${target_mask_path}"  \
-    --print_sim True  >> "$output_filename"  
+    "${target_mask_path}" \
+    --print_sim True  >> "$output_filename"   
+

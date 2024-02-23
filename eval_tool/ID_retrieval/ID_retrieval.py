@@ -199,8 +199,8 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         ref_mask_img = Image.open(mask_path).convert('L')
         ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
 
-        preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # CelebA-HQ
-        # preserve = [1,2,3,5,6,7,9]  # FFHQ or FF++
+        # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # CelebA-HQ
+        preserve = [1,2,3,5,6,7,9]  # FFHQ or FF++
         
         # preserve = [1,2,4,5,8,9 ]
         ref_mask= np.isin(ref_mask_img, preserve)

@@ -1,14 +1,14 @@
 
 # Set variables
-name="Tar_CLIP_SRC_ID_CelebA_trained"
+name="Tar_to_SRC_conf_ep6"
 Results_dir="results_FFHQ/${name}"
 Results_out="results_FFHQ/${name}/results"
 Write_results="results_FFHQ/quantitative/P4s/${name}"
 device=2
 
 
-CONFIG="models_from_CIAI/FFHQ/Target_CLIP_SRC_ID/configs/project.yaml"
-CKPT="models/Paint-by-Example/Target_CLIP_SRC_ID/PBE/celebA/2024-02-15T04-28-52_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS/checkpoints/last.ckpt"
+CONFIG="models_from_CIAI/FFHQ/Tar_to_SRC_conf/configs/project.yaml"
+CKPT="models_from_CIAI/FFHQ/Tar_to_SRC_conf/checkpoints/last.ckpt"
 source_path="dataset/FaceData/FFHQ/Val"
 target_path="dataset/FaceData/FFHQ/Val_target"
 source_mask_path="dataset/FaceData/FFHQ/src_mask"
