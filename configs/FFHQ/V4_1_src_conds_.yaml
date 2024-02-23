@@ -75,7 +75,7 @@ model:
         clip_weight: 1.0
         ID_weight: 10.0
         Landmark_cond: True
-        Landmarks_weight: 0.0
+        Landmarks_weight: 0.05
         arcface_path: "Other_dependencies/arcface/model_ir_se50.pth"
         concat_feat: False
         land_mark_id_seperate_layers: False
@@ -83,7 +83,7 @@ model:
         sep_head_att: False
         Additional_config:
           Reconstruct_initial: True
-          Target_CLIP_feat: True
+          Target_CLIP_feat: False
           Reconstruct_DDIM_steps: 2
           ID_loss_weight: 0.3
           LPIPS_loss_weight: 0.1
@@ -168,7 +168,7 @@ data:
 
 lightning:
   trainer:
-    max_epochs: 20
+    max_epochs: 15
     num_nodes: 1
     accelerator: 'gpu'
     gpus: "0,1,2,3"

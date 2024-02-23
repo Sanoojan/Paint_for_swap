@@ -1220,6 +1220,8 @@ class LatentDiffusion(DDPM):
                 if isinstance(xc, dict) or isinstance(xc, list):
                     # import pudb; pudb.set_trace()
                     c = self.get_learned_conditioning(xc)
+                elif self.Target_CLIP_feat:
+                    c=self.conditioning_with_feat(xc.to(self.device),landmarks=landmarks,tar=x).float()
                 else:
                     
                     c=self.conditioning_with_feat(xc.to(self.device),landmarks=landmarks).float()
@@ -1438,6 +1440,7 @@ class LatentDiffusion(DDPM):
         if self.model.conditioning_key is not None:
             assert c is not None
             if self.cond_stage_trainable:
+                
                 c=self.conditioning_with_feat(c,landmarks=landmarks)
                     
             if self.shorten_cond_schedule:  # TODO: drop this option
@@ -1461,7 +1464,10 @@ class LatentDiffusion(DDPM):
         if self.model.conditioning_key is not None:
             assert c is not None
             if self.cond_stage_trainable:
-                c=self.conditioning_with_feat(c,landmarks=landmarks)
+                if self.Target_CLIP_feat:
+                    c=self.conditioning_with_feat(c,landmarks=landmarks,tar=GT_tar)
+                else:
+                    c=self.conditioning_with_feat(c,landmarks=landmarks)
                     
             if self.shorten_cond_schedule:  # TODO: drop this option
                 tc = self.cond_ids[t].to(self.device)
