@@ -600,7 +600,7 @@ class LatentDiffusion(DDPM):
         elif cond_stage_config.target=="ldm.modules.encoders.modules.FrozenCLIPEmbedder":
             print("Using FrozenCLIPEmbedder")
             self.proj_out=nn.Identity()
-        
+         
         self.concat_mode = concat_mode
         self.cond_stage_trainable = cond_stage_trainable
         self.cond_stage_key = cond_stage_key
@@ -841,7 +841,7 @@ class LatentDiffusion(DDPM):
             c = getattr(self.cond_stage_model, self.cond_stage_forward)(c)
         return c
     
-    def conditioning_with_feat(self,x,landmarks=None,is_train=False,tar=None):
+    def conditioning_with_feat(self,x,landmarks=None,is_train=False,tar=None,tar_mask=None):
         c=0
         c2=0
         #find the model is in training or not
@@ -1647,8 +1647,7 @@ class LatentDiffusion(DDPM):
        
         
         x_samples_ddim= self.differentiable_decode_first_stage(samples_ddim)
-        # x_pred_x0=self.decode_first_stage(intermediates['pred_x0'][0])
-        # x_pred_x0_l=self.decode_first_stage(intermediates['pred_x0'][-1])
+   
         
         # x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
         # x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()

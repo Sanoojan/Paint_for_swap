@@ -1,13 +1,13 @@
 
 # Set variables
-name="Target_CLIP_SRC_ID_ep2_FFHQ_trained"
+name="v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_20"
 Results_dir="results_grad/${name}"
 Results_out="results_grad/${name}/results"
 Write_results="Quantitative_grad/P4s/${name}"
-device=3
+device=1
 
-CONFIG="models/Paint-by-Example/Target_CLIP_SRC_ID/PBE/celebA/2024-02-15T04-28-52_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS/configs/2024-02-15T04-28-52-project.yaml"
-CKPT="models_from_CIAI/FFHQ/Target_CLIP_SRC_ID/checkpoints/last.ckpt"
+CONFIG="models/Paint-by-Example/v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS/PBE/celebA/2024-02-05T22-04-36_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS/configs/2024-02-21T14-09-43-project.yaml"
+CKPT="models/Paint-by-Example/v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS/PBE/celebA/2024-02-05T22-04-36_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS/checkpoints/last.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -31,7 +31,7 @@ python scripts/inference_test_bench.py \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 5 \
-    --n_samples 15 \
+    --n_samples 12 \
     --device_ID ${device} \
     --dataset "CelebA" \
     --ddim_steps 50

@@ -21,6 +21,7 @@ Results_out="/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_
 # Results_out="results_grad/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_DDIM/results"
 # Results_out="results_new/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_49/results"
 # Results_out="results_grad/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep10/results"
+Results_out="/home/sanoojan/other_swappers/DiffFace/results/CelebA/results"
 Results_out="results_grad/Target_CLIP_SRC_ID_ep11_no_hair/results"
 
 

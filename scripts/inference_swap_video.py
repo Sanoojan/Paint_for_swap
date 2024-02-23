@@ -185,6 +185,13 @@ def main():
         default="results_video/debug"
     )
     parser.add_argument(
+        "--Base_dir",
+        type=str,
+        nargs="?",
+        help="dir to write cropped_images",
+        default="results_video"
+    )
+    parser.add_argument(
         "--skip_grid",
         action='store_true',
         help="do not save a grid, only individual samples. Helpful when evaluating lots of samples",
@@ -373,7 +380,7 @@ def main():
 
     os.makedirs(opt.outdir, exist_ok=True)
     outpath = opt.outdir
-
+    Base_path=opt.Base_dir
 
     batch_size = opt.n_samples
     n_rows = opt.n_rows if opt.n_rows > 0 else batch_size
@@ -394,9 +401,9 @@ def main():
     target_video_name=os.path.basename(opt.target_video).split('.')[0]
     src_name=os.path.basename(opt.src_image).split('.')[0]
     
-    target_frames_path=os.path.join(outpath, target_video_name)
-    target_cropped_face_path=os.path.join(outpath, target_video_name+"cropped_face")
-    mask_frames_path=os.path.join(outpath, target_video_name+"mask_frames")
+    target_frames_path=os.path.join(Base_path, target_video_name)
+    target_cropped_face_path=os.path.join(Base_path, target_video_name+"cropped_face")
+    mask_frames_path=os.path.join(Base_path, target_video_name+"mask_frames")
     # os.makedirs(sample_path, exist_ok=True)
     os.makedirs(result_path, exist_ok=True)
     os.makedirs(target_frames_path, exist_ok=True)
@@ -427,8 +434,16 @@ def main():
     
     faceParsing_model = init_faceParsing_pretrained_model(opt.faceParser_name, opt.faceParsing_ckpt, opt.segnext_config)
     
+    
+    crops, orig_images, quads, inv_transforms = crop_and_align_face([opt.src_image])
+    crops = [crop.convert("RGB") for crop in crops]
+    T = crops[0]
+    src_image_new=os.path.join(temp_results_dir, src_name+'.png')
+    T.save(src_image_new)
+
+    
     # src_image=cv2.imread(opt.src_image)
-    pil_im = Image.open(opt.src_image).convert("RGB").resize((1024,1024), Image.BILINEAR)
+    pil_im = Image.open(src_image_new).convert("RGB").resize((1024,1024), Image.BILINEAR)
     mask = faceParsing_demo(faceParsing_model, pil_im, convert_to_seg12=opt.seg12, model_name=opt.faceParser_name)
     Image.fromarray(mask).save(os.path.join(temp_results_dir, os.path.basename(opt.src_image)))
     # base_count = len(os.listdir(sample_path))
@@ -471,7 +486,7 @@ def main():
         np.save(os.path.join(outpath,  target_video_name+'_inv_transforms.npy'), inv_transforms_all)
         
     # load inv_transforms_all
-    inv_transforms_all=np.load(os.path.join(outpath,  target_video_name+'_inv_transforms.npy'), allow_pickle=True)
+    inv_transforms_all=np.load(os.path.join(Base_path,  target_video_name+'_inv_transforms.npy'), allow_pickle=True)
     video.release()
     del faceParsing_model
     
@@ -479,7 +494,7 @@ def main():
     ################### Get reference
     trans=A.Compose([
             A.Resize(height=224,width=224)])
-    ref_img_path = opt.src_image
+    ref_img_path = src_image_new
     img_p_np=cv2.imread(ref_img_path)
     # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
     ref_img = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
@@ -491,7 +506,7 @@ def main():
 
     # Create a mask to preserve values in the 'preserve' list
     # preserve = [1,2,4,5,8,9,17 ]
-    preserve = [1,2,3,5,6,7,9]
+    preserve = [1,2,3,4,5,6,7,8,9]
     # preserve = [1,2,4,5,8,9 ]
     ref_mask= np.isin(ref_mask_img, preserve)
 
@@ -572,7 +587,7 @@ def main():
                 
                 for test_batch,prior, test_model_kwargs,segment_id_batch in test_dataloader:
                     
-                    # if sample<600:
+                    # if sample<1500:
                     #     continue
                     if opt.Start_from_target:
                         
@@ -710,6 +725,7 @@ def main():
 
     path = os.path.join(result_path, '*.png')
     image_filenames = sorted(glob.glob(path))
+    # breakpoint()
     clips = ImageSequenceClip(image_filenames, fps=fps)
     name = os.path.basename(out_video_filepath)
 
@@ -743,20 +759,17 @@ def main():
     #         print("\nERROR! Failed to export WEBP with FFmpeg")
     #         print('\n', sys.exc_info())
     #         sys.exit(0)
-    else:
-        try:
-            clips.write_videofile(out_video_filepath, codec='libx264', audio_codec='aac', ffmpeg_params=[
-                '-pix_fmt:v', 'yuv420p', '-colorspace:v', 'bt709', '-color_primaries:v', 'bt709',
-                '-color_trc:v', 'bt709', '-color_range:v', 'tv', '-movflags', '+faststart'],
-                                  logger=proglog.TqdmProgressBarLogger(print_messages=False))
-        except Exception as e:
-            print("\nERROR! Failed to export video")
-            print('\n', e)
-            sys.exit(0)
+    # else:
+        # breakpoint()
+    clips.write_videofile(out_video_filepath,fps=fps, codec='libx264', audio_codec='aac', ffmpeg_params=['-pix_fmt:v', 'yuv420p', '-colorspace:v', 'bt709', '-color_primaries:v', 'bt709','-color_trc:v', 'bt709', '-color_range:v', 'tv', '-movflags', '+faststart'],logger=proglog.TqdmProgressBarLogger(print_messages=False))
+        # except Exception as e:
+        #     print("\nERROR! Failed to export video")
+        #     print('\n', e)
+        #     sys.exit(0)
 
-        print('\nDone! {}'.format(out_video_filepath))
+    print('\nDone! {}'.format(out_video_filepath))
 
-    print(f"Your samples are ready and waiting for you here: \n{outpath} \n"
+    print(f"Your samples are ready and waiting for you here: \n{out_video_filepath} \n"
           f" \nEnjoy.")
 
 

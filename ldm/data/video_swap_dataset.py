@@ -46,7 +46,8 @@ faceParser_label_list_detailed = ['background', 'lip', 'eyebrows', 'eyes', 'hair
 #FFHQ/ faceparcing network
 # 0:background, 1:lip, 2:eyebrows, 3:eyes, 4:hair, 5:nose, 6:skin, 7:ears, 
 # 8:belowface, 9:mouth, 10:eye_glass, 11:ear_rings
-preserve = [1,2,3,5,6,7,9]
+preserve = [1,2,5,6,7,9]
+# 2,5,6,8,
 def bbox_process(bbox):
     x_min = int(bbox[0])
     y_min = int(bbox[1])
@@ -97,8 +98,22 @@ class VideoDataset(data.Dataset):
         self.data_path=data_path
         self.mask_path=mask_path
         self.gray_outer_mask=args['gray_outer_mask']
-        self.preserve=args['preserve_mask']
         
+        # print(args)
+        # breakpoint()
+        # if hasattr(args, 'preserve_mask_src_video'):
+        #     self.preserve=args['remove_mask_tar_video']
+        #     self.remove_tar=args['remove_mask_tar_video']
+        #     self.preserve_src=args['preserve_mask_src_video']
+        # elif hasattr(args, 'preserve_mask'):
+        #     self.preserve=args['preserve_mask']
+        #     self.remove_tar=args['preserve_mask']
+        #     self.preserve_src=args['preserve_mask']
+        # else:
+        self.preserve=args['remove_mask_tar_video']
+        self.remove_tar=args['remove_mask_tar_video']
+        self.preserve_src=args['preserve_mask_src_video']
+    
         self.Fullmask=False
         # get all imgs in data_path
         self.imgs = [osp.join(data_path, str(img)+".png") for img in range(len(os.listdir(data_path)))]
@@ -141,8 +156,8 @@ class VideoDataset(data.Dataset):
         # Create a mask to preserve values in the 'preserve' list
         # preserve = [1,2,4,5,8,9,17 ]
         # preserve = [1,2,4,5,8,9, 6,7,10,11,12]
-        preserve=self.preserve
-        preserve=[2,3,5,6,7] 
+        preserve=self.remove_tar
+        # preserve=[2,3,5,6,7] 
         mask = np.isin(mask_img, preserve)
 
         # Create a converted_mask where preserved values are set to 255

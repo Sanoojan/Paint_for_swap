@@ -42,3 +42,4 @@ Other_dependencies/FECNet/FECNet.pt
 data/*
 
 models_from_CIAI/*
+checkpoints/face_recon/epoch_latest.pth
