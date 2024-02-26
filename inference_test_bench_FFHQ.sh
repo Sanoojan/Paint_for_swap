@@ -1,14 +1,14 @@
 
 # Set variables
-name="Tar_to_SRC_conf_ep6"
+name="Tar_to_SRC_conf_ep09"
 Results_dir="results_FFHQ/${name}"
 Results_out="results_FFHQ/${name}/results"
 Write_results="results_FFHQ/quantitative/P4s/${name}"
-device=2
+device=3
 
 
 CONFIG="models_from_CIAI/FFHQ/Tar_to_SRC_conf/configs/project.yaml"
-CKPT="models_from_CIAI/FFHQ/Tar_to_SRC_conf/checkpoints/last.ckpt"
+CKPT="models_from_CIAI/FFHQ/Tar_to_SRC_conf/checkpoints/epoch=000009.ckpt"
 source_path="dataset/FaceData/FFHQ/Val"
 target_path="dataset/FaceData/FFHQ/Val_target"
 source_mask_path="dataset/FaceData/FFHQ/src_mask"
@@ -62,10 +62,11 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --d
     "${source_path}" \
     "${Results_out}" \
     "${source_mask_path}" \
-    "${target_mask_path}"  >> "$output_filename"  
+    "${target_mask_path}" \
+    --dataset "ffhq">> "$output_filename"  
 
 
-echo "ID similarity with Target:"
+# echo "ID similarity with Target:"
 CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
     "${target_path}" \
     "${Results_out}" \

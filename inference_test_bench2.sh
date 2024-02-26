@@ -1,6 +1,6 @@
 
 # Set variables
-name="SRC_CLIP_SRC_ID_partial"
+name="SRC_CLIP_SRC_ID_partial_filled"
 Results_dir="results_grad/${name}"
 Results_out="results_grad/${name}/results"
 Write_results="Quantitative_grad/P4s/${name}"

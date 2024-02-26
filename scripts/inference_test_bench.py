@@ -257,7 +257,7 @@ def main():
     parser.add_argument(
         "--dataset",
         type=str,
-        help="dataset: CelebA,FFHQ",
+        help="dataset: CelebA,FFHQ,FF",
         default='CelebA'
     )
     parser.add_argument(
@@ -370,7 +370,7 @@ def main():
                                         batch_size=batch_size, 
                                         num_workers=4, 
                                         pin_memory=True, 
-                                        shuffle=False,#sampler=train_sampler, 
+                                        shuffle=False,
                                         drop_last=False)
 
 
@@ -391,8 +391,8 @@ def main():
             with model.ema_scope():
                 all_samples = list()
                 for test_batch,prior, test_model_kwargs,segment_id_batch in test_dataloader:
-                    sample+=10
-                    # if sample<930:
+                    sample+=opt.n_samples
+                    # if sample<980:
                     #     continue
                     if opt.Start_from_target:
                         
@@ -448,16 +448,17 @@ def main():
                     test_model_kwargs['inpaint_mask']=Resize([z_inpaint.shape[-1],z_inpaint.shape[-1]])(test_model_kwargs['inpaint_mask'])
 
                     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+                    # breakpoint()
                     samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
                                                         conditioning=c,
-                                                        batch_size=opt.n_samples,
+                                                        batch_size=test_batch.shape[0],
                                                         shape=shape,
                                                         verbose=False,
                                                         unconditional_guidance_scale=opt.scale,
                                                         unconditional_conditioning=uc,
                                                         eta=opt.ddim_eta,
                                                         x_T=start_code,
-                                                        test_model_kwargs=test_model_kwargs,src_im=test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float32))
+                                                        test_model_kwargs=test_model_kwargs,src_im=test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float32),tar=test_batch.to("cuda"))
 
                     x_samples_ddim = model.decode_first_stage(samples_ddim)
                     x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)

@@ -58,6 +58,7 @@ parser.add_argument('--num-workers', type=int,
                           'Defaults to `min(8, num_cpus)`'))
 parser.add_argument('--device', type=str, default=None,
                     help='Device to use. Like cuda, cuda:0 or cpu')
+parser.add_argument('--dataset', type=str, default='celeba',help='Dataset to use')
 parser.add_argument('--mask', type=bool, default=True,
                     help='whether to use mask or not')
 # parser.add_argument('--dims', type=int, default=2048,
@@ -170,12 +171,13 @@ class ImagePathDataset(torch.utils.data.Dataset):
 
 
 class MaskedImagePathDataset(torch.utils.data.Dataset):
-    def __init__(self, files,maskfiles=None, transforms=None):
+    def __init__(self, files,maskfiles=None, transforms=None,data_name="celeba"):
         self.files = files
         self.maskfiles = maskfiles  
         self.transforms = transforms
         self.trans=A.Compose([
             A.Resize(height=112,width=112)])
+        self.data_name=data_name
         device = "cuda" if torch.cuda.is_available() else "cpu"
         # _, self.preprocess = clip.load("ViT-B/32", device=device)
         # self.preprocess
@@ -199,9 +201,17 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         ref_mask_img = Image.open(mask_path).convert('L')
         ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
 
+        if self.data_name=="celeba":
+            preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
+        elif self.data_name=="ffhq":
+            preserve = [1,2,3,5,6,7,9]
+        elif self.data_name=="ff++":
+            preserve = [1,2,4,5,8,9 ]
+        else:
+            preserve=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]  # No mask
         # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # CelebA-HQ
-        preserve = [1,2,3,5,6,7,9]  # FFHQ or FF++
-        
+        # preserve = [1,2,3,5,6,7,9]  # FFHQ or FF++
+        # print("preserve:",preserve)
         # preserve = [1,2,4,5,8,9 ]
         ref_mask= np.isin(ref_mask_img, preserve)
 
@@ -233,7 +243,7 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
 
 
 def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2048, device='cpu',
-                    num_workers=1):
+                    num_workers=1,data_name="celeba"):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
     -- files       : List of image files paths
@@ -258,7 +268,7 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
                'Setting batch size to data size'))
         batch_size = len(files)
 
-    dataset = MaskedImagePathDataset(files,maskfiles=mask_files, transforms=TF.ToTensor())
+    dataset = MaskedImagePathDataset(files,maskfiles=mask_files, transforms=TF.ToTensor(),data_name=data_name)
     
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
@@ -306,7 +316,7 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
 
 
 def compute_features_wrapp(path,mask_path, model,IDLoss_model, batch_size, dims, device,
-                               num_workers=1):
+                               num_workers=1,data_name="celeba"):
     if path.endswith('.npz'):
         with np.load(path) as f:
             m, s = f['mu'][:], f['sigma'][:]
@@ -335,12 +345,12 @@ def compute_features_wrapp(path,mask_path, model,IDLoss_model, batch_size, dims,
         numbers = [(num - mi_num) for num in numbers] # celeb
         # breakpoint()
         pred_arr = compute_features(files,mask_files, model,IDLoss_model, batch_size,
-                                               dims, device, num_workers)
+                                               dims, device, num_workers,data_name=data_name)
 
     return pred_arr,numbers
 
 
-def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
+def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data_name="celeba"):
     """Calculates the FID of two paths"""
     for p in paths:
         if not os.path.exists(p):
@@ -378,9 +388,9 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     
 
     feat1,ori_lab = compute_features_wrapp(paths[0],paths[2], CosFace,IDLoss_model, batch_size,
-                                        dims, device, num_workers)
+                                        dims, device, num_workers,data_name=data_name)
     feat2,swap_lab = compute_features_wrapp(paths[1],paths[3], CosFace,IDLoss_model, batch_size,
-                                        dims, device, num_workers)
+                                        dims, device, num_workers,data_name=data_name)
     # dot produc to get similarity
     # breakpoint()
     dot_prod= np.dot(feat2,feat1.T)
@@ -431,7 +441,7 @@ def main():
                                           args.batch_size,
                                           device,
                                           2048,
-                                          num_workers)
+                                          num_workers,data_name=args.dataset)
     
     
     print('Top-1 accuracy: {:.2f}%'.format(top1 * 100))
