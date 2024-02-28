@@ -1,0 +1,2 @@
+Loading hopenet
+Pose_value:  36.18573525395381

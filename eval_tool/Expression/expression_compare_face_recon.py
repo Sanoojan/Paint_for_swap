@@ -105,6 +105,9 @@ class ImagePathDataset(torch.utils.data.Dataset):
     def __getitem__(self, i):
         path = self.files[i]
         im=Image.open(path).convert('RGB')
+        #resize to 512
+        im = im.resize((512, 512), Image.BICUBIC)
+        
         im=torch.tensor(np.array(im)/255., dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
         
         # image=cv2.imread(str(path))

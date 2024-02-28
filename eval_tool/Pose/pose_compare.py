@@ -45,7 +45,7 @@ except ImportError:
     # If tqdm is not available, provide a mock version of it
     def tqdm(x):
         return x
-
+from natsort import natsorted
 # from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
@@ -261,8 +261,9 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
             m, s = f['mu'][:], f['sigma'][:]
     else:
         path = pathlib.Path(path)
-        files = sorted([file for ext in IMAGE_EXTENSIONS
+        files = natsorted([file for ext in IMAGE_EXTENSIONS
                        for file in path.glob('*.{}'.format(ext))])
+        
         # Extract all numbers before the dot using regular expression
         # breakpoint()
         pattern = r'[_\/.-]'

@@ -8,12 +8,12 @@
           checkpoints_dir: ./checkpoints                 
              dataset_mode: None                          
                  ddp_port: 12355                         
-                   device: None                          
+                   device: cuda                          	[default: None]
         display_per_batch: True                          
                     epoch: latest                        
           eval_batch_nums: inf                           
                     focal: 1015.0                        
-                  gpu_ids: 0,1                           
+                  gpu_ids: 0                             
                img_folder: examples                      
                 init_path: checkpoints/init_model/resnet50-0676ba61.pth
                   isTrain: False                         	[default: None]
@@ -26,12 +26,12 @@
                     phase: test                          
                 print_sim: False                         
                    suffix:                               
-                  use_ddp: True                          
+                  use_ddp: False                         	[default: True]
               use_last_fc: False                         
                use_opengl: True                          
                   verbose: False                         
            vis_batch_nums: 1                             
-               world_size: 2                             	[default: 1]
+               world_size: 1                             
                     z_far: 15.0                          
                    z_near: 5.0                           
 ----------------- End -------------------

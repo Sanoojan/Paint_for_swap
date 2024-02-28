@@ -295,7 +295,7 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
             pred = model(batch )
             
             # pred=IDLoss_model.extract_feats(batch)[-1]
-            # pred = model(batch )[0] for arcface
+            
             
         # breakpoint()
         # # If model output is not scalar, apply global spatial average pooling.

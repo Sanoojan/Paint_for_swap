@@ -44,3 +44,6 @@ data/*
 models_from_CIAI/*
 checkpoints/face_recon/epoch_latest.pth
 models_from_114/*
+train.sh
+
+Quantitative_Grad_all/*

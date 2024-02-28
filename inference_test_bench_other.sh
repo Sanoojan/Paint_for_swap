@@ -22,10 +22,10 @@ Results_out="/home/sanoojan/e4s/Results/testbench/results_Original_ckpt_without_
 # Results_out="results_new/v4_reconstruct_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_49/results"
 # Results_out="results_grad/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep10/results"
 Results_out="/home/sanoojan/other_swappers/DiffFace/results/CelebA/results"
-Results_out="results_grad/Target_CLIP_SRC_ID_ep11_no_hair/results"
+# Results_out="results_grad/Target_CLIP_SRC_ID_ep11_no_hair/results"
 
 
-Write_results="results/Debug/with_grad_trained"
+Write_results="Quantitave_grad/Other_swappers/DiffFace"
 
 # Set variables
 # name="avg_3_features_full_face_with_augs_scale1"
@@ -67,9 +67,9 @@ fi
 #     "${Results_out}"  >> "$output_filename"
 
 # echo "Pose comarison with target:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
-#     "${target_path}" \
-#     "${Results_out}"  >> "$output_filename"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
+    "${target_path}" \
+    "${Results_out}"  >> "$output_filename"
 
 # # echo "Expression comarison with target:"
 # CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_face_recon.py --device cuda \
