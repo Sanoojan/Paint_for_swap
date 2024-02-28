@@ -1,13 +1,13 @@
 
 # Set variables
-name="v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_3DMM_feats_ep12"
+name="v5_Two_CLIP_proj_with_multiple_ID_losses_ep02"
 Results_dir="results_grad/${name}"
 Results_out="results_grad/${name}/results"
 Write_results="Quantitative_grad/P4s/${name}"
 device=2
 
-CONFIG="models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_3DMM_feats/PBE/celebA/2024-02-21T04-01-41_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_3DMM_feats/configs/2024-02-21T04-01-41-project.yaml"
-CKPT="models/Paint-by-Example/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_3DMM_feats/PBE/celebA/2024-02-21T04-01-41_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_3DMM_feats/checkpoints/last.ckpt"
+CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_with_multiple_ID_losses/PBE/celebA/2024-02-27T00-54-33_v5_Two_CLIP_proj_with_multiple_ID_losses/configs/2024-02-27T00-54-33-project.yaml"
+CKPT="models/Paint-by-Example/v5_Two_CLIP_proj_with_multiple_ID_losses/PBE/celebA/2024-02-27T00-54-33_v5_Two_CLIP_proj_with_multiple_ID_losses/checkpoints/last.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -26,18 +26,17 @@ fi
 
 # Run inference
 
-# python scripts/inference_test_bench.py \
-#     --outdir "${Results_dir}" \
-#     --config "${CONFIG}" \
-#     --ckpt "${CKPT}" \
-#     --scale 5 \
-#     --n_samples 15 \
-#     --device_ID ${device} \
-#     --dataset "CelebA" \
-#     --ddim_steps 50
-
-    # --Start_from_target 
-    # --target_start_noise_t 800  
+CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
+    --outdir "${Results_dir}" \
+    --config "${CONFIG}" \
+    --ckpt "${CKPT}" \
+    --scale 5 \
+    --n_samples 10 \
+    --device_ID ${device} \
+    --dataset "CelebA" \
+    --ddim_steps 50 \
+    --Start_from_target \
+    --target_start_noise_t 1000  
     
 
 

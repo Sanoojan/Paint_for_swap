@@ -294,7 +294,7 @@ def main():
         type=str,
         help="evaluate at this precision",
         choices=["full", "autocast"],
-        default="autocast"
+        default="full"
     )
     opt = parser.parse_args()
     
@@ -308,7 +308,7 @@ def main():
         opt.outdir = "outputs/txt2img-samples-laion400m"
 
     seed_everything(opt.seed)
-    torch.cuda.set_device(opt.device_ID)
+    # torch.cuda.set_device(opt.device_ID)
     config = OmegaConf.load(f"{opt.config}")
     model = load_model_from_config(config, f"{opt.ckpt}")
 
@@ -403,7 +403,7 @@ def main():
                         t=int(opt.target_start_noise_t)
                         # t = torch.ones((x.shape[0],), device=device).long()*t
                         t = torch.randint(t-1, t, (x.shape[0],), device=device).long()
-                  
+                    
                         if use_prior:
                             prior=prior.to(device)
                             encoder_posterior_2=model.encode_first_stage(prior)
@@ -428,7 +428,7 @@ def main():
                     
                     # c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))
                     landmarks=model.get_landmarks(test_batch) if model.Landmark_cond else None
-                    c=model.conditioning_with_feat(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16),landmarks=landmarks,tar=test_batch.to("cuda").to(torch.float16)).float()
+                    c=model.conditioning_with_feat(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float32),landmarks=landmarks,tar=test_batch.to("cuda").to(torch.float32)).float()
                     if (model.land_mark_id_seperate_layers or model.sep_head_att) and opt.scale != 1.0:
             
                         # concat c, landmarks
@@ -459,7 +459,7 @@ def main():
                                                         eta=opt.ddim_eta,
                                                         x_T=start_code,
                                                         test_model_kwargs=test_model_kwargs,src_im=test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float32),tar=test_batch.to("cuda"))
-
+                    # breakpoint()
                     x_samples_ddim = model.decode_first_stage(samples_ddim)
                     x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
                     x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()

@@ -1,10 +1,10 @@
 
 # Set variables
-name="Guided_Test_segmentation_with_gaze_guidance"
+name="Guided_Test_backward_ID_and_segm"
 Results_dir="results_grad/${name}"
 Results_out="results_grad/${name}/results"
 Write_results="Quantitative_grad/P4s/${name}"
-device=3
+device=2
 
 CONFIG="models_from_114/CelebA/SRC_CLIP_SRC_ID/configs/project.yaml"
 CKPT="models_from_114/CelebA/SRC_CLIP_SRC_ID/checkpoints/epoch=000017.ckpt"
@@ -26,7 +26,7 @@ fi
 
 # Run inference
 
-python scripts/inference_test_bench.py \
+CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --outdir "${Results_dir}" \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \

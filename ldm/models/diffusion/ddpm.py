@@ -157,7 +157,7 @@ class IDLoss(nn.Module):
             loss = 0
             sim_improvement = 0
             count = 0
-            
+            # lossess = []
             for i in range(n_samples):
                 sim_target = y_hat_feats[i].dot(y_feats[i])
                 sim_views = y_feats[i].dot(y_feats[i])
@@ -166,6 +166,7 @@ class IDLoss(nn.Module):
                 loss += 1 - sim_target  # id loss
                 sim_improvement +=  float(sim_target) - float(sim_views)
                 count += 1
+                
             
             loss_all += loss / count
             sim_improvement_all += sim_improvement / count
@@ -616,12 +617,7 @@ class LatentDiffusion(DDPM):
         
         # self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
         # breakpoint()
-        if cond_stage_config.target=="ldm.modules.encoders.modules.FrozenCLIPImageEmbedder":
-            print("Using FrozenCLIPImageEmbedder")
-            self.proj_out=nn.Linear(1024, 768)
-        elif cond_stage_config.target=="ldm.modules.encoders.modules.FrozenCLIPEmbedder":
-            print("Using FrozenCLIPEmbedder")
-            self.proj_out=nn.Identity()
+        
          
         self.concat_mode = concat_mode
         self.cond_stage_trainable = cond_stage_trainable
@@ -679,6 +675,14 @@ class LatentDiffusion(DDPM):
                     self.Target_CLIP_feat=cond_stage_config.other_params.Additional_config.Target_CLIP_feat
                 else:
                     self.Target_CLIP_feat=False
+                if hasattr(cond_stage_config.other_params.Additional_config, 'Source_CLIP_feat'):
+                    self.Source_CLIP_feat=cond_stage_config.other_params.Additional_config.Source_CLIP_feat
+                else:
+                    self.Source_CLIP_feat=False
+                if hasattr(cond_stage_config.other_params.Additional_config, 'Multiple_ID_losses'):
+                    self.Multiple_ID_losses=cond_stage_config.other_params.Additional_config.Multiple_ID_losses
+                else:
+                    self.Multiple_ID_losses=False
                 if hasattr(cond_stage_config.other_params.Additional_config, 'use_3dmm'):  
                     self.use_3dmm=cond_stage_config.other_params.Additional_config.use_3dmm
                 else:
@@ -734,6 +738,21 @@ class LatentDiffusion(DDPM):
         # self.train_reduce_steps = (self.hparams.epochs * self.train_batches) // (self.hparams.accumulate_grad_batches * 2) # for half of the time full trining with ID
         # self.change_weights=2/self.train_steps
         self.total_steps_in_epoch=0 # will be calculated inside training_step. Not known for now
+        
+        if cond_stage_config.target=="ldm.modules.encoders.modules.FrozenCLIPImageEmbedder":
+            print("Using FrozenCLIPImageEmbedder")
+            self.proj_out=nn.Linear(1024, 768)
+        elif cond_stage_config.target=="ldm.modules.encoders.modules.FrozenCLIPEmbedder" and self.Source_CLIP_feat and self.Target_CLIP_feat:
+            print("Using FrozenCLIPEmbedder")
+            print("Using two projections for source and target")
+            self.proj_out_source=nn.Linear(768, 768)
+            self.proj_out_target=nn.Linear(768, 768)
+            self.proj_out=nn.Identity()
+        elif cond_stage_config.target=="ldm.modules.encoders.modules.FrozenCLIPEmbedder":
+            print("Using FrozenCLIPEmbedder")
+            self.proj_out=nn.Identity()
+        
+        
                 
         if self.use_3dmm:
             self.models_3dmm = create_model(dmm_defaults)
@@ -907,7 +926,27 @@ class LatentDiffusion(DDPM):
         
         if self.clip_weight>0:
             
-            if self.use_3dmm and tar is None:
+            if self.Source_CLIP_feat and self.Target_CLIP_feat and tar is not None:
+                c_src=self.get_learned_conditioning(x)
+                c_src = self.proj_out_source(c_src)
+                
+                tar1=tar*1.0
+                tar1=un_norm(tar1)
+                tar1=tar1.to(self.device)
+                tar1=TF.normalize(tar1, mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
+                # resize tar1 to 224
+                tar1=TF.resize(tar1, (224,224))
+                c = self.get_learned_conditioning(tar1) #-->c:[4,1,1024]
+                c = self.proj_out_target(c) #-->c:[4,1,768]
+                c=c_src+c
+            
+            elif self.Source_CLIP_feat and self.Target_CLIP_feat:
+                c_src=self.get_learned_conditioning(x)
+                c_src = self.proj_out_source(c_src)
+                c=c_src
+                
+            
+            elif self.use_3dmm and tar is None:
 
 
                 
@@ -1703,7 +1742,7 @@ class LatentDiffusion(DDPM):
             reference=torch.flip(reference,[0]) # 4,3,224,224
             cond=self.conditioning_with_feat(reference.to(self.device),landmarks=landmarks,tar=GT_tar).float()
         
-        samples_ddim, _ = self.sampler.sample_train(S=ddim_steps,
+        samples_ddim, sample_intermediates = self.sampler.sample_train(S=ddim_steps,
                                                 conditioning=cond,
                                                 batch_size=n_samples,
                                                 shape=shape,
@@ -1715,11 +1754,14 @@ class LatentDiffusion(DDPM):
                                                 t=t_new,
                                                 test_model_kwargs=test_model_kwargs)
 
+
        
         
-        x_samples_ddim= self.differentiable_decode_first_stage(samples_ddim)
+        # x_samples_ddim= self.differentiable_decode_first_stage(samples_ddim)
    
-        
+        other_pred_x_0=sample_intermediates['pred_x0']
+        for i in range(len(other_pred_x_0)):
+            other_pred_x_0[i]=self.differentiable_decode_first_stage(other_pred_x_0[i])
         # x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
         # x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
         
@@ -1742,13 +1784,18 @@ class LatentDiffusion(DDPM):
             # reference=TF.resize(reference,(256,256))
             
             # x_samples_ddim=TF.resize(x_samples_ddim,(256,256))
-            masks=1-TF.resize(x_start[:,8,:,:],(x_samples_ddim.shape[2],x_samples_ddim.shape[3]))
+            masks=1-TF.resize(x_start[:,8,:,:],(other_pred_x_0[0].shape[2],other_pred_x_0[0].shape[3]))
             #mask x_samples_ddim
-            x_samples_ddim_masked=x_samples_ddim*masks.unsqueeze(1)
+            x_samples_ddim_masked=[x_samples_ddim_preds*masks.unsqueeze(1) for x_samples_ddim_preds in other_pred_x_0]
             # x_samples_ddim_masked=un_norm_clip(x_samples_ddim_masked)
             # x_samples_ddim_masked = TF.normalize(x_samples_ddim_masked, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            ID_Losses=[]
+            for step,x_samples_ddim_preds in enumerate(x_samples_ddim_masked):
+                ID_loss,sim_imp,_=self.face_ID_model(x_samples_ddim_preds,reference,clip_img=False)
+                ID_Losses.append(ID_loss)
+                loss_dict.update({f'{prefix}/ID_loss_{step}': ID_loss})
             
-            ID_loss,sim_imp,_=self.face_ID_model(x_samples_ddim_masked,reference,clip_img=False)
+            ID_loss=torch.mean(torch.stack(ID_Losses))  
             loss_dict.update({f'{prefix}/ID_loss': ID_loss})
             loss_dict.update({f'{prefix}/sim_imp': sim_imp})
             
@@ -1757,14 +1804,21 @@ class LatentDiffusion(DDPM):
             
             if self.LPIPS_loss_weight>0:
                 
-                
-                for i in range(3):
-                    loss_lpips_1 = self.lpips_loss(
-                        F.adaptive_avg_pool2d(x_samples_ddim,(512//2**i,512//2**i)), 
-                        F.adaptive_avg_pool2d(GT_tar,(512//2**i,512//2**i))
-                    )
+                for j in range(len(other_pred_x_0)):
+                    for i in range(3):
+                        loss_lpips_1 = self.lpips_loss(
+                            F.adaptive_avg_pool2d(other_pred_x_0[j],(512//2**i,512//2**i)), 
+                            F.adaptive_avg_pool2d(GT_tar,(512//2**i,512//2**i))
+                        )
+                        loss_dict.update({f'{prefix}/loss_lpips_{j}_{i}': loss_lpips_1})
+                        loss_lpips += loss_lpips_1
+                # for i in range(3):
+                #     loss_lpips_1 = self.lpips_loss(
+                #         F.adaptive_avg_pool2d(other_pred_x_0[-1],(512//2**i,512//2**i)), 
+                #         F.adaptive_avg_pool2d(GT_tar,(512//2**i,512//2**i))
+                #     )
                     
-                    loss_lpips += loss_lpips_1
+                #     loss_lpips += loss_lpips_1
                 
                 loss_dict.update({f'{prefix}/loss_lpips': loss_lpips})
                 

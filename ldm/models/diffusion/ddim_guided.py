@@ -8,7 +8,7 @@ from src.Face_models.encoders.model_irse import Backbone
 import torch.nn as nn
 import torchvision.transforms.functional as TF
 from torch.nn.functional import mse_loss, l1_loss
-
+import torch.nn.utils as utils
 import face_alignment
 import torch
 
@@ -335,7 +335,7 @@ class DDIMSampler(object):
         return img, intermediates
 
     @torch.no_grad()
-    def p_sample_ddim_guided(self, x, c, t, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
+    def p_sample_ddim_guided_forward(self, x, c, t, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
                       unconditional_guidance_scale=1., unconditional_conditioning=None,src_im=None,tar=None,**kwargs):
         b, *_, device = *x.shape, x.device
@@ -542,6 +542,328 @@ class DDIMSampler(object):
             if noise_dropout > 0.:
                 noise = torch.nn.functional.dropout(noise, p=noise_dropout)
             x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
+            
+            del dir_xt,noise,x
+            #     x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
+            # else:  
+            #     seperate_sim=3*torch.tensor(seperate_sim)
+            #     #make upper limit 1 and lower limit 0
+            #     seperate_sim=torch.clamp(seperate_sim,0,1)
+            #     x_prev = a_prev.sqrt() * pred_x0 + seperate_sim.view(-1,1,1,1).to(self.model.device)*dir_xt + noise
+            return x_prev, pred_x0
+        
+    @torch.no_grad()
+    def p_sample_ddim_guided(self, x, c, t, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
+                      temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
+                      unconditional_guidance_scale=1., unconditional_conditioning=None,src_im=None,tar=None,**kwargs):
+        b, *_, device = *x.shape, x.device
+        if 'test_model_kwargs' in kwargs:
+            kwargs=kwargs['test_model_kwargs']
+            x = torch.cat([x, kwargs['inpaint_image'], kwargs['inpaint_mask']],dim=1)
+        elif 'rest' in kwargs:
+            x = torch.cat((x, kwargs['rest']), dim=1)
+        else:
+            raise Exception("kwargs must contain either 'test_model_kwargs' or 'rest' key")
+        
+        torch.set_grad_enabled(True)
+        x_in = x.detach().requires_grad_(True)
+        
+        
+        
+        if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
+            e_t = self.model.apply_model(x_in, t, c)
+        else:  # check @ sanoojan
+            x_in_n = torch.cat([x_in] * 2) #x_in: 2,9,64,64
+            t_in = torch.cat([t] * 2)
+            c_in = torch.cat([unconditional_conditioning, c]) #c_in: 2,1,768
+            e_t_uncond, e_t = self.model.apply_model(x_in_n, t_in, c_in).chunk(2)
+            e_t = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond) #1,4,64,64
+
+        if score_corrector is not None:
+            assert self.model.parameterization == "eps"
+            e_t = score_corrector.modify_score(self.model, e_t, x_in, t, c, **corrector_kwargs)
+
+        
+
+
+        alphas = self.model.alphas_cumprod if use_original_steps else self.ddim_alphas
+        alphas_prev = self.model.alphas_cumprod_prev if use_original_steps else self.ddim_alphas_prev
+        sqrt_one_minus_alphas = self.model.sqrt_one_minus_alphas_cumprod if use_original_steps else self.ddim_sqrt_one_minus_alphas
+        sigmas = self.model.ddim_sigmas_for_original_num_steps if use_original_steps else self.ddim_sigmas
+        # select parameters corresponding to the currently considered timestep
+        a_t = torch.full((b, 1, 1, 1), alphas[index], device=device)
+        a_prev = torch.full((b, 1, 1, 1), alphas_prev[index], device=device)
+        sigma_t = torch.full((b, 1, 1, 1), sigmas[index], device=device)
+        sqrt_one_minus_at = torch.full((b, 1, 1, 1), sqrt_one_minus_alphas[index],device=device)
+        
+        Backward_guidance=True
+        # current prediction for x_0
+        if x.shape[1]!=4:
+            pred_x0 = (x_in[:,:4,:,:] - sqrt_one_minus_at * e_t) / a_t.sqrt()
+            # G_id=ID_LOSS
+            seperate_sim=None
+            # src_im=None
+            
+            if src_im is not None and False:
+                pred_x0_im=self.model.differentiable_decode_first_stage(pred_x0)
+                masks=1-TF.resize(x_in[:,8,:,:],(pred_x0_im.shape[2],pred_x0_im.shape[3]))
+                #mask x_samples_ddim
+                pred_x0_im_masked=pred_x0_im*masks.unsqueeze(1)
+                # x_samples_ddim_masked=un_norm_clip(x_samples_ddim_masked)
+                # x_samples_ddim_masked = TF.normalize(x_samples_ddim_masked, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                Loss=0
+                # breakpoint()
+                # im_rec=torch.clamp((pred_x0_im_masked + 1.0) / 2.0, min=0.0, max=1.0)
+                # im_tar=torch.clamp((tar + 1.0) / 2.0, min=0.0, max=1.0)
+                # im_src=torch.clamp(src_im, min=0.0, max=1.0)
+                
+                
+                # Segmentation Loss
+                ################################
+                src_mask  = (pred_x0_im + 1) / 2
+                src_mask  = TF.resize(src_mask,(512,512))
+                src_mask  = TF.normalize(src_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                targ_mask = (tar + 1) / 2
+                targ_mask  = TF.resize(targ_mask,(512,512))
+                targ_mask = TF.normalize(targ_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                # breakpoint()
+                src_seg  = self.seg(self.spNorm(src_mask))[0]
+                # breakpoint()
+                src_seg = TF.resize(src_seg, (256, 256))
+                targ_seg = self.seg(self.spNorm(targ_mask))[0]
+                targ_seg = TF.resize(targ_seg, (256, 256))
+
+                seg_loss = torch.tensor(0).to(self.model.device).float()
+
+                # Attributes = [0, 'background', 1 'skin', 2 'r_brow', 3 'l_brow', 4 'r_eye', 5 'l_eye', 6 'eye_g', 7 'l_ear', 8 'r_ear', 9 'ear_r', 10 'nose', 11 'mouth', 12 'u_lip', 13 'l_lip', 14 'neck', 15 'neck_l', 16 'cloth', 17 'hair', 18 'hat']
+                ids = [11, 12, 13]
+
+                for id in ids:
+                    seg_loss += l1_loss(src_seg[:,id,:,:], targ_seg[:,id,:,:])
+                    # seg_loss += mse_loss(src_seg[0,id,:,:], targ_seg[0,id,:,:])
+
+                Loss = Loss + seg_loss * 200
+                ################################
+                
+                #3DMM Loss
+                ################################
+                # im_rec=(pred_x0_im_masked + 1.0) / 2.0
+                
+                # #resize im_tar to 512x512
+                
+                # im_tar=(tar + 1.0) / 2.0
+                # im_src=TF.resize(src_im,(512,512))
+                
+                # im_conc=torch.cat((im_rec,im_tar,im_src),dim=0)
+                # c_all=self.models_3dmm.net_recon(im_conc)
+                # c_rec=c_all[:b]
+                # c_tar=c_all[b:2*b]
+                # c_src=c_all[2*b:]
+                
+                
+                # # breakpoint()
+                # # c_rec=self.models_3dmm.net_recon(im_rec)
+                # # c_tar=self.models_3dmm.net_recon(im_tar)
+                # # c_src=self.models_3dmm.net_recon(im_src)
+                
+                # target_filt_c_rec=c_rec[:, 80:144]
+                # target_filt_c_tar=c_tar[:, 80:144]
+                
+                # #select 0:80 and 144:224
+                # src_filt_c_rec=torch.cat((c_rec[:, :80],c_rec[:, 144:224]),dim=1)
+                # src_filt_c_src=torch.cat((c_src[:, :80],c_src[:, 144:224]),dim=1)
+                
+                
+                # # src_filt_c_rec=c_rec[:, 144:224]
+                # # src_filt_c_src=c_src[:, 144:224]
+                
+                
+                # # id_coeffs = coeffs[:, :80]
+                # # exp_coeffs = coeffs[:, 80: 144]
+                # # tex_coeffs = coeffs[:, 144: 224]
+                # # angles = coeffs[:, 224: 227]
+                # # gammas = coeffs[:, 227: 254]
+                # # translations = coeffs[:, 254:]
+                        
+                # # cosine loss between the two reconstructions
+                # # cosine_loss =1- torch.nn.functional.cosine_similarity(target_filt_c_rec, target_filt_c_tar, dim=1)
+                
+                # # cosine_loss =1- torch.nn.functional.cosine_similarity(src_filt_c_rec, src_filt_c_src, dim=1)
+                # cosine_loss_tar=1- torch.nn.functional.cosine_similarity(target_filt_c_rec, target_filt_c_tar, dim=1)
+                # # L2_loss = mse_loss(src_filt_c_rec, src_filt_c_src)
+                
+                # Loss+=cosine_loss_tar.sum()*100.0
+                # # +cosine_loss_tar.sum()*100.0
+                ################################
+                
+                #ID LOSS and GAZE Loss
+                ################################
+                # if t[0]<10 or t[0]>200:
+                #     src_im=TF.normalize(src_im, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                #     ID_loss,_,seperate_sim=self.model.face_ID_model(pred_x0_im_masked,src_im,clip_img=False,return_seperate=True)
+                #     Loss+=ID_loss
+                # # breakpoint()
+                
+                if t[0]>10 and t[0]<300:
+                    try:
+                        src_eye = pred_x0_im_masked * 0.5 + 0.5
+                        targ_eye = tar
+                        targ_eye = targ_eye * 0.5 + 0.5
+                        llx, lly, lrx, lry, rlx, rly, rrx, rry = get_eye_coords(self.fa, targ_eye)
+                        # breakpoint()
+                        if llx is not None:
+                            targ_left_eye   = targ_eye[:, :, lly:lry, llx:lrx]
+                            src_left_eye    = src_eye[:, :, lly:lry, llx:lrx]
+                            targ_right_eye  = targ_eye[:, :, rly:rry, rlx:rrx]
+                            src_right_eye   = src_eye[:, :, rly:rry, rlx:rrx]
+                            targ_left_eye   = torch.mean(targ_left_eye, dim=1, keepdim=True)
+                            src_left_eye    = torch.mean(src_left_eye, dim=1, keepdim=True)
+                            targ_right_eye  = torch.mean(targ_right_eye, dim=1, keepdim=True)
+                            src_right_eye   = torch.mean(src_right_eye, dim=1, keepdim=True)
+                            targ_left_gaze  = self.netGaze(targ_left_eye.squeeze(0))
+                            src_left_gaze   = self.netGaze(src_left_eye.squeeze(0))
+                            targ_right_gaze = self.netGaze(targ_right_eye.squeeze(0))
+                            src_right_gaze  = self.netGaze(src_right_eye.squeeze(0))
+                            left_gaze_loss  = l1_loss(targ_left_gaze, src_left_gaze)
+                            right_gaze_loss = l1_loss(targ_right_gaze, src_right_gaze)
+                            gaze_loss = (left_gaze_loss + right_gaze_loss) * 1
+
+                        Loss+=gaze_loss.sum()
+                    except:
+                        print("Error in Gaze Estimation")
+                    # else:
+                    #     ID_loss,_,seperate_sim=self.model.face_ID_model(pred_x0_im_masked,src_im,clip_img=False,return_seperate=True)
+                    #     Loss+=ID_loss
+                        # breakpoint()
+                ################################  
+                
+                
+                
+                
+                
+                # breakpoint()
+                grad=torch.autograd.grad(-1*Loss, x_in)[0]
+                grad=grad*20.0
+                grad=grad[:,:4,:,:].detach()
+                e_t=e_t-sqrt_one_minus_at*grad
+                x_in=x_in.requires_grad_(False)
+                del pred_x0,pred_x0_im_masked,grad,x_in,masks,pred_x0_im
+                torch.set_grad_enabled(False)
+        if Backward_guidance:
+            pred_x0 = (x_in[:,:4,:,:] - sqrt_one_minus_at * e_t) / a_t.sqrt()
+            recons_image=self.model.differentiable_decode_first_stage(pred_x0)
+            recons_image=recons_image.detach().requires_grad_(True)
+            masks=1-TF.resize(x_in[:,8,:,:],(recons_image.shape[2],recons_image.shape[3]))
+            optimizer = torch.optim.Adam([recons_image], lr=5e-13)
+            
+            
+            weights = torch.ones_like(recons_image).cuda()
+            ones = torch.ones_like(recons_image).cuda()
+            zeros = torch.zeros_like(recons_image).cuda()
+            max_iters=2
+            for _ in range(max_iters):
+                with torch.no_grad():
+                    recons_image.clamp_(-1, 1)
+
+                optimizer.zero_grad()
+                # if operation_func != None:
+                #     op_im = operation_func(recons_image)
+                # else:
+                #     op_im = recons_image
+
+                # loss = criterion(op_im, operated_image)
+                src_im=TF.normalize(src_im, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                ID_loss,_,seperate_sim=self.model.face_ID_model(recons_image,src_im,clip_img=False,return_seperate=True)
+                loss=1-torch.stack(seperate_sim,dim=0)
+                
+                
+                
+                src_mask  = (recons_image + 1) / 2
+                src_mask  = TF.resize(src_mask,(512,512))
+                src_mask  = TF.normalize(src_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                targ_mask = (tar + 1) / 2
+                targ_mask  = TF.resize(targ_mask,(512,512))
+                targ_mask = TF.normalize(targ_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                # breakpoint()
+                src_seg  = self.seg(self.spNorm(src_mask))[0]
+                # breakpoint()
+                src_seg = TF.resize(src_seg, (256, 256))
+                targ_seg = self.seg(self.spNorm(targ_mask))[0]
+                targ_seg = TF.resize(targ_seg, (256, 256))
+
+                # seg_loss = torch.tensor(0).to(self.model.device).float()
+
+                # Attributes = [0, 'background', 1 'skin', 2 'r_brow', 3 'l_brow', 4 'r_eye', 5 'l_eye', 6 'eye_g', 7 'l_ear', 8 'r_ear', 9 'ear_r', 10 'nose', 11 'mouth', 12 'u_lip', 13 'l_lip', 14 'neck', 15 'neck_l', 16 'cloth', 17 'hair', 18 'hat']
+                ids = [11, 12, 13]
+                seg_losses=[]
+                for im in range(recons_image.shape[0]):
+                    seg_loss = 0
+                    for id in ids:
+                        seg_loss+=(l1_loss(src_seg[im,id,:,:], targ_seg[im,id,:,:]))
+                    seg_losses.append(seg_loss)
+                loss+=torch.stack(seg_losses,dim=0)
+                # for id in ids:
+                #     seg_loss += l1_loss(src_seg[:,id,:,:], targ_seg[:,id,:,:])
+                    # seg_loss += mse_loss(src_seg[0,id,:,:], targ_seg[0,id,:,:])
+
+                # seg_loss * 200
+                
+                
+                
+                # breakpoint()
+                for __ in range(loss.shape[0]):
+                    if loss[__] < 0.00001:              #loss cutoff
+                        weights[__] = zeros[__]
+                    else:
+                        weights[__] = ones[__]
+
+                before_x = torch.clone(recons_image.data)
+
+
+                m_loss = loss.mean()
+                m_loss.backward()
+                
+                # breakpoint()
+                utils.clip_grad_norm_(recons_image, 0.01)
+                optimizer.step()
+
+                # if operation.lr_scheduler != None:
+                #     scheduler.step()
+                # breakpoint()
+                with torch.no_grad():
+                    recons_image.data = before_x * (1 - weights) + weights * recons_image.data
+
+                if weights.sum() == 0:
+                    break
+                
+            recons_image.requires_grad = False
+            torch.set_grad_enabled(False)
+
+            recons_image = torch.clamp(recons_image, -1, 1)
+            pred_x0_new = self.model.encode_first_stage(recons_image)
+            
+            pred_x0_new=self.model.get_first_stage_encoding(pred_x0_new)
+            # breakpoint()
+            e_t=(x[:,:4,:,:]- pred_x0_new*a_t.sqrt())/sqrt_one_minus_at
+            
+        else:
+            pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
+            
+        if quantize_denoised:
+            pred_x0, _, *_ = self.model.first_stage_model.quantize(pred_x0)
+        # direction pointing to x_t
+        with torch.no_grad():
+            if Backward_guidance:
+                pred_x0=pred_x0_new
+            else:
+                pred_x0 = (x[:,:4,:,:] - sqrt_one_minus_at * e_t) / a_t.sqrt()
+            dir_xt = (1. - a_prev - sigma_t**2).sqrt() * e_t
+            noise = sigma_t * noise_like(dir_xt.shape, device, repeat_noise) * temperature
+            if noise_dropout > 0.:
+                noise = torch.nn.functional.dropout(noise, p=noise_dropout)
+            x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
+            
+            
             
             del dir_xt,noise,x
             #     x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
