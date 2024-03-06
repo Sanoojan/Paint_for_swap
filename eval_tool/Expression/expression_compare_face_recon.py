@@ -37,14 +37,16 @@ import torch.nn.functional as F
 # from src.Face_models.encoders.model_irse import Backbone
 # import eval_tool.face_vid2vid.modules.hopenet as hopenet1
 import cv2
-from eval_tool.FECNet.models.FECNet import FECNet
+# from eval_tool.FECNet.models.FECNet import FECNet
 from torchvision import models
 # import clip
 from eval_tool.Deep3DFaceRecon_pytorch.options.test_options import TestOptions
     # breakpoint()
 # give empty string to use the default options
-test_opt = TestOptions().parse()
- 
+test_opt = TestOptions('')
+test_opt = test_opt.parse()
+
+
     # def coeff_exp(self, img):
     #     coeff, mask = self.models_expression.forward(img)
     #     # mask = F.interpolate(mask, size=(img.shape[-1], img.shape[-1]))
@@ -62,8 +64,23 @@ except ImportError:
 
 # from inception import InceptionV3
 
-# parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-
+parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+parser.add_argument('--batch-size', type=int, default=50,
+                    help='Batch size to use')
+parser.add_argument('--num-workers', type=int,
+                    help=('Number of processes to use for data loading. '
+                          'Defaults to `min(8, num_cpus)`'))
+parser.add_argument('--device', type=str, default=None,
+                    help='Device to use. Like cuda, cuda:0 or cpu')
+# parser.add_argument('--dims', type=int, default=2048,
+#                     choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
+#                     help=('Dimensionality of Inception features to use. '
+#                           'By default, uses pool3 features'))
+parser.add_argument('path', type=str, nargs=2,
+                    default=['dataset/FaceData/CelebAMask-HQ/Val_target', 'results_grad/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16/results'],
+                    help=('Paths to the generated images or '
+                          'to .npz statistic files'))
+parser.add_argument('--print_sim', type=bool, default=False,)
 
 
 
@@ -364,10 +381,10 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
 
 
 def main():
-    # args = parser.parse_args()
+    args = parser.parse_args()
     # args= test_opt.parse()
     
-    args= test_opt
+    # args= test_opt
     if args.device is None:
         device = torch.device('cuda' if (torch.cuda.is_available()) else 'cpu')
     else:

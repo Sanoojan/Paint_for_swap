@@ -493,9 +493,11 @@ class FFHQdataset(data.Dataset):
             self.remove_tar=args['preserve_mask']
             self.preserve_src=args['preserve_mask']
         else:
-            self.preserve=args['preserve_mask_src']
-            self.remove_tar=args['remove_mask_tar']
-            self.preserve_src=args['preserve_mask_src']
+            self.preserve=args['preserve_mask_src_FFHQ']
+            self.remove_tar=args['remove_mask_tar_FFHQ']
+            self.preserve_src=args['preserve_mask_src_FFHQ']
+        
+        
         
         if state == "train":
             self.imgs = sorted([osp.join(args['dataset_dir'], "images512", '{0:0=5d}.png'.format(idx)) for idx in range(68000)])
@@ -683,9 +685,9 @@ class FFdataset(data.Dataset):
             self.remove_tar=args['preserve_mask']
             self.preserve_src=args['preserve_mask']
         else:
-            self.preserve=args['preserve_mask_src']
-            self.remove_tar=args['remove_mask_tar']
-            self.preserve_src=args['preserve_mask_src']
+            self.preserve=args['preserve_mask_src_FFHQ']
+            self.remove_tar=args['remove_mask_tar_FFHQ']
+            self.preserve_src=args['preserve_mask_src_FFHQ']
         
         if state == "train":
             self.imgs = sorted([osp.join(args['dataset_dir'], "images512", '{0:0=5d}.png'.format(idx)) for idx in range(68000)])

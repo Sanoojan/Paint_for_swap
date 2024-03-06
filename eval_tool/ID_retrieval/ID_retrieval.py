@@ -29,6 +29,7 @@ from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 import numpy as np
 import torch
 import torchvision.transforms as TF
+import torchvision.transforms.functional as TFF
 from PIL import Image
 import re
 from scipy import linalg
@@ -48,6 +49,7 @@ import cv2
 import albumentations as A
 import torch.nn as nn
 from natsort import natsorted
+
 # from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
@@ -71,8 +73,33 @@ parser.add_argument('path', type=str, nargs=4,
                           'to .npz statistic files'))
 
 parser.add_argument('--print_sim', type=bool, default=False,)
+parser.add_argument('--arcface', type=bool, default=False)
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}
+
+def un_norm_clip(x1):
+    x = x1*1.0 # to avoid changing the original tensor or clone() can be used
+    reduce=False
+    if len(x.shape)==3:
+        x = x.unsqueeze(0)
+        reduce=True
+    x[:,0,:,:] = x[:,0,:,:] * 0.26862954 + 0.48145466
+    x[:,1,:,:] = x[:,1,:,:] * 0.26130258 + 0.4578275
+    x[:,2,:,:] = x[:,2,:,:] * 0.27577711 + 0.40821073
+    
+    if reduce:
+        x = x.squeeze(0)
+    return x
+
+def get_tensor_clip(normalize=True, toTensor=True):
+    transform_list = []
+    if toTensor:
+        transform_list += [torchvision.transforms.ToTensor()]
+
+    if normalize:
+        transform_list += [torchvision.transforms.Normalize((0.48145466, 0.4578275, 0.40821073),
+                                                (0.26862954, 0.26130258, 0.27577711))]
+    return torchvision.transforms.Compose(transform_list)
 
 class IDLoss(nn.Module):
     def __init__(self,multiscale=True):
@@ -95,11 +122,11 @@ class IDLoss(nn.Module):
         for p in self.parameters():
             p.requires_grad = flag
     
-    def extract_feats(self, x,clip_img=True):
+    def extract_feats(self, x,clip_img=False):
         # breakpoint()
-        # if clip_img:
-        #     x = un_norm_clip(x)
-        #     x = TF.normalize(x, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        if clip_img:
+            x = un_norm_clip(x)
+            x = TFF.normalize(x, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         x = self.face_pool_1(x)  if x.shape[2]!=256 else  x # (1) resize to 256 if needed
         x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
         x = self.face_pool_2(x) # (3) resize to 112 to fit pre-trained model
@@ -109,37 +136,38 @@ class IDLoss(nn.Module):
         # x_feats = self.facenet(x) # changed by sanoojan
         return x_feats
 
-    
+    def forward(self, x,clip_img=False):
+        x_feats_ms = self.extract_feats(x,clip_img=clip_img)
+        return x_feats_ms[-1]
+    # def forward(self, y_hat, y,clip_img=True):
+    #     n_samples = y.shape[0]
+    #     y_feats_ms = self.extract_feats(y,clip_img=clip_img)  # Otherwise use the feature from there
 
-    def forward(self, y_hat, y,clip_img=True):
-        n_samples = y.shape[0]
-        y_feats_ms = self.extract_feats(y,clip_img=clip_img)  # Otherwise use the feature from there
-
-        y_hat_feats_ms = self.extract_feats(y_hat,clip_img=clip_img)
-        y_feats_ms = [y_f.detach() for y_f in y_feats_ms]
+    #     y_hat_feats_ms = self.extract_feats(y_hat,clip_img=clip_img)
+    #     y_feats_ms = [y_f.detach() for y_f in y_feats_ms]
         
-        loss_all = 0
-        sim_improvement_all = 0
+    #     loss_all = 0
+    #     sim_improvement_all = 0
    
-        for y_hat_feats, y_feats in zip(y_hat_feats_ms, y_feats_ms):
+    #     for y_hat_feats, y_feats in zip(y_hat_feats_ms, y_feats_ms):
  
-            loss = 0
-            sim_improvement = 0
-            count = 0
+    #         loss = 0
+    #         sim_improvement = 0
+    #         count = 0
             
-            for i in range(n_samples):
-                sim_target = y_hat_feats[i].dot(y_feats[i])
-                sim_views = y_feats[i].dot(y_feats[i])
+    #         for i in range(n_samples):
+    #             sim_target = y_hat_feats[i].dot(y_feats[i])
+    #             sim_views = y_feats[i].dot(y_feats[i])
     
                 
-                loss += 1 - sim_target  # id loss
-                sim_improvement +=  float(sim_target) - float(sim_views)
-                count += 1
+    #             loss += 1 - sim_target  # id loss
+    #             sim_improvement +=  float(sim_target) - float(sim_views)
+    #             count += 1
             
-            loss_all += loss / count
-            sim_improvement_all += sim_improvement / count
+    #         loss_all += loss / count
+    #         sim_improvement_all += sim_improvement / count
     
-        return loss_all, sim_improvement_all, None
+    #     return loss_all, sim_improvement_all, None
 
 def get_tensor(normalize=True, toTensor=True):
     transform_list = []
@@ -221,20 +249,29 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
         # convert to PIL image
         
+        reference_mask_tensor=get_tensor(normalize=False, toTensor=True)(ref_converted_mask)
+        mask_ref=TF.Resize((112,112))(reference_mask_tensor)
+        ref_img=self.trans(image=image)
+        ref_img=Image.fromarray(ref_img["image"])
+        ref_img=get_tensor()(ref_img)
+        ref_img=ref_img*mask_ref
+        image = ref_img.unsqueeze(0)
         
-        ref_mask_img_r = ref_converted_mask.resize(image.shape[1::-1], Image.NEAREST)
-        ref_mask_img_r = np.array(ref_mask_img_r)
-        image[ref_mask_img_r==0]=0
-        
-        image=self.trans(image=image)
-        image=Image.fromarray(image["image"])
-        image=get_tensor()(image)
         
         
-        # ref_img=Image.fromarray(ref_img)
+        # ref_mask_img_r = ref_converted_mask.resize(image.shape[1::-1], Image.NEAREST)
+        # ref_mask_img_r = np.array(ref_mask_img_r)
+        # image[ref_mask_img_r==0]=0
         
-        # ref_img=get_tensor_clip()(ref_img)
-        image = image.unsqueeze(0)
+        # image=self.trans(image=image)
+        # image=Image.fromarray(image["image"])
+        # image=get_tensor()(image)
+        
+        
+        # # ref_img=Image.fromarray(ref_img)
+        
+        # # ref_img=get_tensor_clip()(ref_img)
+        # image = image.unsqueeze(0)
         
         
         
@@ -242,7 +279,7 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         return image
 
 
-def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2048, device='cpu',
+def compute_features(files,mask_files, model,other_model, batch_size=50, dims=2048, device='cpu',
                     num_workers=1,data_name="celeba"):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
@@ -292,7 +329,7 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
             # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
             # x = face_pool_2(x) # (3) resize to 112 to fit pre-trained model
             # breakpoint()
-            pred = model(batch )
+            pred = model(batch)
             
             # pred=IDLoss_model.extract_feats(batch)[-1]
             
@@ -315,7 +352,7 @@ def compute_features(files,mask_files, model,IDLoss_model, batch_size=50, dims=2
 
 
 
-def compute_features_wrapp(path,mask_path, model,IDLoss_model, batch_size, dims, device,
+def compute_features_wrapp(path,mask_path, IDLoss_model,Other_model, batch_size, dims, device,
                                num_workers=1,data_name="celeba"):
     if path.endswith('.npz'):
         with np.load(path) as f:
@@ -344,13 +381,13 @@ def compute_features_wrapp(path,mask_path, model,IDLoss_model, batch_size, dims,
         # if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
         numbers = [(num - mi_num) for num in numbers] # celeb
         # breakpoint()
-        pred_arr = compute_features(files,mask_files, model,IDLoss_model, batch_size,
+        pred_arr = compute_features(files,mask_files, IDLoss_model,Other_model, batch_size,
                                                dims, device, num_workers,data_name=data_name)
 
     return pred_arr,numbers
 
 
-def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data_name="celeba"):
+def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data_name="celeba",args=None):
     """Calculates the FID of two paths"""
     for p in paths:
         if not os.path.exists(p):
@@ -364,16 +401,18 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
     # cosface_state_dict = torch.load("eval_tool/Face_rec_models/iresnet100_cosface/backbone.pth")
     # CosFace = iresnet100()
     
+    if args.arcface:
+        IDLoss_model=IDLoss().cuda()
+    else:
+        cosface_state_dict = torch.load('eval_tool/Face_rec_models/cosface/net_sphere20_data_vggface2_acc_9955.pth')
+        IDLoss_model = cosface.sphere().cuda()
+        
+        
+        IDLoss_model.load_state_dict(cosface_state_dict)
+        IDLoss_model.eval()
+        IDLoss_model.to(device)
     
-    cosface_state_dict = torch.load('eval_tool/Face_rec_models/cosface/net_sphere20_data_vggface2_acc_9955.pth')
-    CosFace = cosface.sphere().cuda()
     
-    
-    CosFace.load_state_dict(cosface_state_dict)
-    CosFace.eval()
-    CosFace.to(device)
-    
-    IDLoss_model=IDLoss().cuda()
     
     
 
@@ -387,9 +426,9 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
     # CosFace.to(device)
     
 
-    feat1,ori_lab = compute_features_wrapp(paths[0],paths[2], CosFace,IDLoss_model, batch_size,
+    feat1,ori_lab = compute_features_wrapp(paths[0],paths[2], IDLoss_model,None, batch_size,
                                         dims, device, num_workers,data_name=data_name)
-    feat2,swap_lab = compute_features_wrapp(paths[1],paths[3], CosFace,IDLoss_model, batch_size,
+    feat2,swap_lab = compute_features_wrapp(paths[1],paths[3], IDLoss_model,None, batch_size,
                                         dims, device, num_workers,data_name=data_name)
     # dot produc to get similarity
     # breakpoint()
@@ -441,7 +480,7 @@ def main():
                                           args.batch_size,
                                           device,
                                           2048,
-                                          num_workers,data_name=args.dataset)
+                                          num_workers,data_name=args.dataset,args=args)
     
     
     print('Top-1 accuracy: {:.2f}%'.format(top1 * 100))
