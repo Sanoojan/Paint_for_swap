@@ -55,3 +55,11 @@ Save_intermediates/*
 results_FINAL_Steps/*
 DiffSwap_results/*
 Aligned/*
+
+Quantitative_Grad_all/*
+Save_intermediates/*
+examples/*
+Quantitative_FINALS/*
+results_FFHQ_FINAL/*
+Quantitative_Grad_Other_swappers/*
+results_FINALS/*
