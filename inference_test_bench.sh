@@ -1,13 +1,13 @@
 
 # Set variables
-name="v5_Two_CLIP_proj_with_multiple_ID_losses_ep17_3_"
-Results_dir="results_FINAL_Steps/${name}"
-Results_out="results_FINAL_Steps/${name}/results"
-Write_results="Quantitative_FINAL/P4s/${name}"
-device=2
+name="24_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_src_features_ep7"
+Results_dir="results_grad/${name}"
+Results_out="results_grad/${name}/results"
+Write_results="Quantitative_grad/P4s/${name}"
+device=4
 
-CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_with_multiple_ID_losses/PBE/celebA/2024-02-27T00-54-33_v5_Two_CLIP_proj_with_multiple_ID_losses/configs/2024-02-27T00-54-33-project.yaml"
-CKPT="models/Paint-by-Example/v5_Two_CLIP_proj_with_multiple_ID_losses/PBE/celebA/2024-02-27T00-54-33_v5_Two_CLIP_proj_with_multiple_ID_losses/checkpoints/epoch=000017.ckpt"
+CONFIG="models/Paint-by-Example/Final_src_clip_ID_features_Text_eq_emb_stable_diff/PBE/celebA/2024-02-24T17-26-24_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_src_features/configs/2024-02-24T17-26-24-project.yaml"
+CKPT="models/Paint-by-Example/Final_src_clip_ID_features_Text_eq_emb_stable_diff/PBE/celebA/2024-02-24T17-26-24_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_src_features/checkpoints/last.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -30,7 +30,7 @@ CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --outdir "${Results_dir}" \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
-    --scale 4 \
+    --scale 5 \
     --n_samples 10 \
     --device_ID ${device} \
     --dataset "CelebA" \

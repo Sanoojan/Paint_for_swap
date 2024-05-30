@@ -329,9 +329,9 @@ def compute_features(files,mask_files, model,other_model, batch_size=50, dims=20
             # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
             # x = face_pool_2(x) # (3) resize to 112 to fit pre-trained model
             # breakpoint()
-            pred = model(batch)
+            # pred = model(batch )
             
-            # pred=IDLoss_model.extract_feats(batch)[-1]
+            pred=IDLoss_model.extract_feats(batch)[-1]
             
             
         # breakpoint()
