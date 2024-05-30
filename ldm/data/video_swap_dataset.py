@@ -101,18 +101,14 @@ class VideoDataset(data.Dataset):
         
         # print(args)
         # breakpoint()
-        # if hasattr(args, 'preserve_mask_src_video'):
-        #     self.preserve=args['remove_mask_tar_video']
-        #     self.remove_tar=args['remove_mask_tar_video']
-        #     self.preserve_src=args['preserve_mask_src_video']
-        # elif hasattr(args, 'preserve_mask'):
-        #     self.preserve=args['preserve_mask']
-        #     self.remove_tar=args['preserve_mask']
-        #     self.preserve_src=args['preserve_mask']
-        # else:
-        self.preserve=args['remove_mask_tar_video']
-        self.remove_tar=args['remove_mask_tar_video']
-        self.preserve_src=args['preserve_mask_src_video']
+        if hasattr(args, 'preserve_mask'):
+            self.preserve=args['preserve_mask']
+            self.remove_tar=args['preserve_mask']
+            self.preserve_src=args['preserve_mask']
+        else:
+            self.preserve=args['remove_mask_tar_FFHQ']
+            self.remove_tar=args['remove_mask_tar_FFHQ']
+            self.preserve_src=args['preserve_mask_src_FFHQ']
     
         self.Fullmask=False
         # get all imgs in data_path

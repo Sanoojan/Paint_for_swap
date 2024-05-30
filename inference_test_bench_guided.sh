@@ -1,6 +1,6 @@
 
 # Set variables
-name="Guided_Test_backward_ID_and_segm"
+name="test_delete"
 Results_dir="results_grad/${name}"
 Results_out="results_grad/${name}/results"
 Write_results="Quantitative_grad/P4s/${name}"
@@ -31,10 +31,10 @@ CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 5 \
-    --n_samples 5 \
+    --n_samples 2 \
     --device_ID ${device} \
     --dataset "CelebA" \
-    --ddim_steps 50 \
+    --ddim_steps 75 \
     --Guidance 
 
     # --Start_from_target 

@@ -34,40 +34,55 @@ fi
 
 # Run FID score calculation
 
-# echo "FID score with Source:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-#     "${source_path}" \
-#     "${Results_out}"  >> "$output_filename"
+echo "FID score with Source:"   >> "$output_filename"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+    "${source_path}" \
+    "${Results_out}"  >> "$output_filename"
 
-# echo "FID score with Dataset:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-#     "${Dataset_path}" \
-#     "${Results_out}"  >> "$output_filename"
+echo "FID score with Dataset:" >> "$output_filename"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+    "${Dataset_path}" \
+    "${Results_out}"  >> "$output_filename"
 
-# echo "Pose comarison with target:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
-#     "${target_path}" \
-#     "${Results_out}"  >> "$output_filename"
+echo "Pose comarison with target:" >> "$output_filename"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
+    "${target_path}" \
+    "${Results_out}"  >> "$output_filename"
 
-echo "ID similarity with Source:"
+echo "Expression comarison with target:" >> "$output_filename"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_face_recon.py --device cuda \
+    "${target_path}" \
+    "${Results_out}"  >> "$output_filename"
+
+echo "ID similarity with Target:" >> "$output_filename"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+    "${target_path}" \
+    "${Results_out}" \
+    "${target_mask_path}" \
+    "${target_mask_path}"  >> "$output_filename"  
+
+echo "ID_restoreformer" >> "$output_filename"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
+    "${Results_out}" \
+    --gt_folder "${source_path}"   >> "$output_filename"  
+
+echo "ID similarity with Source using cosface:" >> "$output_filename"
 CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
     "${source_path}" \
     "${Results_out}" \
     "${source_mask_path}" \
-    "${target_mask_path}"  
-    
-    # >> "$output_filename"  
+    "${target_mask_path}" \
+    --dataset "ffhq" \
+    --print_sim True  >> "$output_filename"   
 
 
-# echo "ID similarity with Target:"
-# CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
-#     "${target_path}" \
-#     "${Results_out}" \
-#     "${target_mask_path}" \
-#     "${target_mask_path}"  >> "$output_filename"  
-
-echo "ID_restoreformer"
-CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
+echo "ID similarity with Source using Arcface:" >> "$output_filename"
+CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+    "${source_path}" \
     "${Results_out}" \
-    --gt_folder "${source_path}" 
+    "${source_mask_path}" \
+    "${target_mask_path}" \
+    --dataset "ffhq" \
+    --print_sim True  \
+    --arcface True >> "$output_filename" 
 

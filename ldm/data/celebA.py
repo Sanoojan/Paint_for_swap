@@ -51,46 +51,7 @@ TOTEN = ToTensor()
 TOPIL = ToPILImage()
 DEVICE = torch.device("cpu")
 
-# def grid_points_2d(width, height):
-#     """
-#     Create 2d grid points. Distribute points across a width and height,
-#     with the resulting coordinates constrained to -1, 1
-#     returns tensor shape (width * height, 2)
-#     """
-#     xx, yy = torch.meshgrid(
-#         [torch.linspace(-1.0, 1.0, height),
-#          torch.linspace(-1.0, 1.0, width)])
-#     return torch.stack([yy, xx], dim=-1).contiguous().view(-1, 2)
-# def noisy_grid(width, height, noise_matrix):
-#     """
-#     Make uniform grid points, and add noise except for edge points.
-#     """
-#     grid = grid_points_2d(width, height)
-#     mod = torch.zeros([height, width, 2])
-#     mod[1:height - 1, 1:width - 1, :] = noise_matrix
-#     return grid + mod.reshape(-1, 2)
-# def grid_to_img(grid_points, width, height):
-#     """
-#     convert (N * 2) tensor of grid points in -1, 1 to tuple of (x, y)
-#     scaled to width, height.
-#     return (x, y) to plot"""
-#     grid_clone = grid_points.clone().numpy()
-#     x = (1 + grid_clone[..., 0]) * (width - 1) / 2
-#     y = (1 + grid_clone[..., 1]) * (height - 1) / 2
-#     return x.flatten(), y.flatten()
-# def decow(img,a=4):
-#     n, c, w, h = img.size()
-#     device = torch.device('cuda')
-#     # a = 4
-#     X = grid_points_2d(a, a,)
-#     noise = (torch.rand([a-2, a-2, 2]) - 0.5) * 0.9
-#     # noise = (torch.rand([1, 1, 2]) - 0.5)
-#     Y = noisy_grid(a, a, noise, device)
-#     tpsb = TPS(size=(h, w), device=device)
-#     warped_grid_b = tpsb(X[None, ...], Y[None, ...])
-#     warped_grid_b = warped_grid_b.repeat(img.shape[0], 1, 1, 1)
-#     awt_img = torch.grid_sampler_2d(img, warped_grid_b, 0, 0, False)
-#     return awt_img
+
 
 def grid_points_2d(width, height, device=DEVICE):
     """

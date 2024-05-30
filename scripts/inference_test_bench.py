@@ -52,7 +52,19 @@ safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
 # set cuda device 
 
+def save_sample_by_decode(x,model,Base_path,segment_id_batch,intermediate_num):
 
+    
+    x = model.decode_first_stage(x)
+    x = torch.clamp((x + 1.0) / 2.0, min=0.0, max=1.0)
+    x = x.cpu().permute(0, 2, 3, 1).numpy()
+    for i in range(len(x)):
+        img = Image.fromarray((x[i] * 255).astype(np.uint8))
+        save_path=os.path.join(Base_path, f"{segment_id_batch[i]}")
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        img.save(os.path.join(Base_path, f"{segment_id_batch[i]}/{intermediate_num}.png"))
+    
 
 
 def chunk(it, size):
@@ -261,6 +273,12 @@ def main():
         default='CelebA'
     )
     parser.add_argument(
+        "--dataset_dir",
+        type=str,
+        help="dataset_dir",
+        default='dataset/FaceData/CelebAMask-HQ'
+    )
+    parser.add_argument(
         "--from-file",
         type=str,
         help="if specified, load prompts from this file",
@@ -364,6 +382,7 @@ def main():
         test_dataset=FFHQdataset(split='test',**test_args)
         
     elif opt.dataset=='FF++':
+        test_args['dataset_dir']=opt.dataset_dir if opt.dataset_dir is not None else test_args['dataset_dir']
         test_dataset=FFdataset(split='test',**test_args)
         
     test_dataloader= torch.utils.data.DataLoader(test_dataset, 
@@ -449,7 +468,7 @@ def main():
 
                     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                     # breakpoint()
-                    samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
+                    samples_ddim, intermediates = sampler.sample(S=opt.ddim_steps,
                                                         conditioning=c,
                                                         batch_size=test_batch.shape[0],
                                                         shape=shape,
@@ -458,8 +477,21 @@ def main():
                                                         unconditional_conditioning=uc,
                                                         eta=opt.ddim_eta,
                                                         x_T=start_code,
+                                                        log_every_t=100,
                                                         test_model_kwargs=test_model_kwargs,src_im=test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float32),tar=test_batch.to("cuda"))
                     # breakpoint()
+                    save_intermediates=False
+                    
+                    
+                    # breakpoint()
+                    if save_intermediates:
+                        intermediate_pred_x0=intermediates['pred_x0']
+                        intermediate_noised=intermediates['x_inter']
+                        for i in range(len(intermediate_pred_x0)):
+                            save_sample_by_decode(intermediate_pred_x0[i],model,Base_path="Save_intermediates/pred_x0",segment_id_batch=segment_id_batch,intermediate_num=i)
+                            save_sample_by_decode(intermediate_noised[i],model,Base_path="Save_intermediates/intermediate",segment_id_batch=segment_id_batch,intermediate_num=i)
+                    
+                    
                     x_samples_ddim = model.decode_first_stage(samples_ddim)
                     x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
                     x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()

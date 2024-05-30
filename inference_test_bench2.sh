@@ -1,6 +1,6 @@
 
 # Set variables
-name="SRC_CLIP_SRC_ID_partial_filled"
+name="SRC_CLIP_SRC_ID_Renact_landmarks"
 Results_dir="results_grad/${name}"
 Results_out="results_grad/${name}/results"
 Write_results="Quantitative_grad/P4s/${name}"
@@ -30,15 +30,15 @@ fi
 
 # Run inference
 
-python scripts/inference_test_bench.py \
+CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --outdir "${Results_dir}" \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 5 \
-    --n_samples 15 \
+    --n_samples 10 \
     --device_ID ${device} \
     --dataset "CelebA" \
-    --ddim_steps 50
+    --ddim_steps 75 
 
     # --Start_from_target 
     # --target_start_noise_t 800  

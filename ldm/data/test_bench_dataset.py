@@ -658,6 +658,7 @@ class FFHQdataset(data.Dataset):
 class FFdataset(data.Dataset):
     def __init__(self,state,load_vis_img=False,label_transform=None,fraction=1.0,**args
         ):
+        
         self.label_transform=label_transform
         self.fraction=fraction
         self.load_vis_img=load_vis_img

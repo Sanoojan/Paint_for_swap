@@ -71,6 +71,36 @@ def get_eye_coords(fa, image):
     right_eye = [int(right_eye_left[0]) - x, int(eye_y_average - y), int(right_eye_right[0]) + x, int(eye_y_average + y)]
     return [*left_eye, *right_eye]
 
+def get_eye_coords_from_landmarks(fa, landmarks):
+    preds=landmarks if  landmarks[0][0] !=0 else None
+    if preds is None:
+        return [None] * 8
+     
+    x, y = 5, 9
+    left_eye_left = preds[36]
+    left_eye_right = preds[39]
+    eye_y_average = (left_eye_left[1] + left_eye_right[1]) // 2
+    left_eye = [int(left_eye_left[0]) - x, int(eye_y_average - y), int(left_eye_right[0]) + x, int(eye_y_average + y)]
+    right_eye_left = preds[42]
+    right_eye_right = preds[45]
+    eye_y_average = (right_eye_left[1] + right_eye_right[1]) // 2
+    right_eye = [int(right_eye_left[0]) - x, int(eye_y_average - y), int(right_eye_right[0]) + x, int(eye_y_average + y)]
+    return [*left_eye, *right_eye]
+
+def get_full_coords(fa,image):
+    image = image
+    # image = image * 128 + 128
+    # image = image.to(torch.uint8)
+    # image = image.permute(1, 2, 0)
+    # image = image.cpu().numpy()
+
+    try:
+        preds = fa.face_alignment_net(image)
+        # breakpoint()
+    except:
+        return [None] * 62
+    return preds
+
 from Other_dependencies.gaze_estimation.gaze_estimator import Gaze_estimator
 
 from ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters, make_ddim_timesteps, noise_like, \
@@ -318,7 +348,7 @@ class DDIMSampler(object):
                 assert x0 is not None
                 img_orig = self.model.q_sample(x0, ts)  # TODO: deterministic forward pass?
                 img = img_orig * mask + (1. - mask) * img
-            outs = self.p_sample_ddim_guided(img, cond, ts, index=index, use_original_steps=ddim_use_original_steps,
+            outs = self.p_sample_ddim_guided_forward(img, cond, ts, index=index, use_original_steps=ddim_use_original_steps,
                                       quantize_denoised=quantize_denoised, temperature=temperature,
                                       noise_dropout=noise_dropout, score_corrector=score_corrector,
                                       corrector_kwargs=corrector_kwargs,
@@ -400,29 +430,29 @@ class DDIMSampler(object):
                 
                 # Segmentation Loss
                 ################################
-                src_mask  = (pred_x0_im + 1) / 2
-                src_mask  = TF.resize(src_mask,(512,512))
-                src_mask  = TF.normalize(src_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                targ_mask = (tar + 1) / 2
-                targ_mask  = TF.resize(targ_mask,(512,512))
-                targ_mask = TF.normalize(targ_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                # breakpoint()
-                src_seg  = self.seg(self.spNorm(src_mask))[0]
-                # breakpoint()
-                src_seg = TF.resize(src_seg, (256, 256))
-                targ_seg = self.seg(self.spNorm(targ_mask))[0]
-                targ_seg = TF.resize(targ_seg, (256, 256))
+                # src_mask  = (pred_x0_im + 1) / 2
+                # src_mask  = TF.resize(src_mask,(512,512))
+                # src_mask  = TF.normalize(src_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                # targ_mask = (tar + 1) / 2
+                # targ_mask  = TF.resize(targ_mask,(512,512))
+                # targ_mask = TF.normalize(targ_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                # # breakpoint()
+                # src_seg  = self.seg(self.spNorm(src_mask))[0]
+                # # breakpoint()
+                # src_seg = TF.resize(src_seg, (256, 256))
+                # targ_seg = self.seg(self.spNorm(targ_mask))[0]
+                # targ_seg = TF.resize(targ_seg, (256, 256))
 
-                seg_loss = torch.tensor(0).to(self.model.device).float()
+                # seg_loss = torch.tensor(0).to(self.model.device).float()
 
-                # Attributes = [0, 'background', 1 'skin', 2 'r_brow', 3 'l_brow', 4 'r_eye', 5 'l_eye', 6 'eye_g', 7 'l_ear', 8 'r_ear', 9 'ear_r', 10 'nose', 11 'mouth', 12 'u_lip', 13 'l_lip', 14 'neck', 15 'neck_l', 16 'cloth', 17 'hair', 18 'hat']
-                ids = [11, 12, 13]
+                # # Attributes = [0, 'background', 1 'skin', 2 'r_brow', 3 'l_brow', 4 'r_eye', 5 'l_eye', 6 'eye_g', 7 'l_ear', 8 'r_ear', 9 'ear_r', 10 'nose', 11 'mouth', 12 'u_lip', 13 'l_lip', 14 'neck', 15 'neck_l', 16 'cloth', 17 'hair', 18 'hat']
+                # ids = [1,11, 12, 13]
 
-                for id in ids:
-                    seg_loss += l1_loss(src_seg[:,id,:,:], targ_seg[:,id,:,:])
-                    # seg_loss += mse_loss(src_seg[0,id,:,:], targ_seg[0,id,:,:])
+                # for id in ids:
+                #     seg_loss += l1_loss(src_seg[:,id,:,:], targ_seg[:,id,:,:])
+                #     # seg_loss += mse_loss(src_seg[0,id,:,:], targ_seg[0,id,:,:])
 
-                Loss = Loss + seg_loss * 200
+                # Loss = Loss + seg_loss * 10
                 ################################
                 
                 #3DMM Loss
@@ -476,45 +506,92 @@ class DDIMSampler(object):
                 # # +cosine_loss_tar.sum()*100.0
                 ################################
                 
-                #ID LOSS and GAZE Loss
+                # GAZE Loss
                 ################################
-                # if t[0]<10 or t[0]>200:
-                #     src_im=TF.normalize(src_im, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                # if t[0]>10 and t[0]<200:
+                    
+                #     src_eyes = pred_x0_im_masked * 0.5 + 0.5
+                #     targ_eyes = tar
+                #     targ_eyes = targ_eyes * 0.5 + 0.5
+                #     for targ_eye,src_eye in zip(targ_eyes, src_eyes):
+                #         targ_eye = targ_eye.unsqueeze(0)
+                #         src_eye = src_eye.unsqueeze(0)
+                #         try:
+                #             llx, lly, lrx, lry, rlx, rly, rrx, rry = get_eye_coords(self.fa, targ_eye)
+    
+                #             if llx is not None:
+                #                 targ_left_eye   = targ_eye[:, :, lly:lry, llx:lrx]
+                #                 src_left_eye    = src_eye[:, :, lly:lry, llx:lrx]
+                #                 targ_right_eye  = targ_eye[:, :, rly:rry, rlx:rrx]
+                #                 src_right_eye   = src_eye[:, :, rly:rry, rlx:rrx]
+                #                 targ_left_eye   = torch.mean(targ_left_eye, dim=1, keepdim=True)
+                #                 src_left_eye    = torch.mean(src_left_eye, dim=1, keepdim=True)
+                #                 targ_right_eye  = torch.mean(targ_right_eye, dim=1, keepdim=True)
+                #                 src_right_eye   = torch.mean(src_right_eye, dim=1, keepdim=True)
+                #                 targ_left_gaze  = self.netGaze(targ_left_eye.squeeze(0))
+                #                 src_left_gaze   = self.netGaze(src_left_eye.squeeze(0))
+                #                 targ_right_gaze = self.netGaze(targ_right_eye.squeeze(0))
+                #                 src_right_gaze  = self.netGaze(src_right_eye.squeeze(0))
+                #                 left_gaze_loss  = l1_loss(targ_left_gaze, src_left_gaze)
+                #                 right_gaze_loss = l1_loss(targ_right_gaze, src_right_gaze)
+                #                 gaze_loss = (left_gaze_loss + right_gaze_loss) * 1
+
+                #                 Loss+=gaze_loss.sum()
+                #         except:
+                #             print("Error in Gaze Estimation")
+                
+                #ID LOSS        
+                #####################
+                # if t[0]>5 and t[0]<500:
                 #     ID_loss,_,seperate_sim=self.model.face_ID_model(pred_x0_im_masked,src_im,clip_img=False,return_seperate=True)
                 #     Loss+=ID_loss
-                # # breakpoint()
-                
-                if t[0]>10 and t[0]<300:
-                    try:
-                        src_eye = pred_x0_im_masked * 0.5 + 0.5
-                        targ_eye = tar
-                        targ_eye = targ_eye * 0.5 + 0.5
-                        llx, lly, lrx, lry, rlx, rly, rrx, rry = get_eye_coords(self.fa, targ_eye)
                         # breakpoint()
-                        if llx is not None:
-                            targ_left_eye   = targ_eye[:, :, lly:lry, llx:lrx]
-                            src_left_eye    = src_eye[:, :, lly:lry, llx:lrx]
-                            targ_right_eye  = targ_eye[:, :, rly:rry, rlx:rrx]
-                            src_right_eye   = src_eye[:, :, rly:rry, rlx:rrx]
-                            targ_left_eye   = torch.mean(targ_left_eye, dim=1, keepdim=True)
-                            src_left_eye    = torch.mean(src_left_eye, dim=1, keepdim=True)
-                            targ_right_eye  = torch.mean(targ_right_eye, dim=1, keepdim=True)
-                            src_right_eye   = torch.mean(src_right_eye, dim=1, keepdim=True)
-                            targ_left_gaze  = self.netGaze(targ_left_eye.squeeze(0))
-                            src_left_gaze   = self.netGaze(src_left_eye.squeeze(0))
-                            targ_right_gaze = self.netGaze(targ_right_eye.squeeze(0))
-                            src_right_gaze  = self.netGaze(src_right_eye.squeeze(0))
-                            left_gaze_loss  = l1_loss(targ_left_gaze, src_left_gaze)
-                            right_gaze_loss = l1_loss(targ_right_gaze, src_right_gaze)
-                            gaze_loss = (left_gaze_loss + right_gaze_loss) * 1
+                ######################################
+                        
+                # #Landmark_loss  Some problem with detected landmarks
+                # if t[0]>5 and t[0]<300:
+                #     src_eyes = pred_x0_im * 0.5 + 0.5
+                #     targ_eyes = tar
+                #     targ_eyes = targ_eyes * 0.5 + 0.5
+                #     for targ_eye,src_eye in zip(targ_eyes, src_eyes):
+                #         targ_eye = targ_eye.unsqueeze(0)
+                #         src_eye = src_eye.unsqueeze(0)
+                        
+                #         try:
+                #             preds = get_full_coords(self.fa, targ_eye)
+                #             pred_swap = get_full_coords(self.fa, src_eye)
 
-                        Loss+=gaze_loss.sum()
-                    except:
-                        print("Error in Gaze Estimation")
-                    # else:
-                    #     ID_loss,_,seperate_sim=self.model.face_ID_model(pred_x0_im_masked,src_im,clip_img=False,return_seperate=True)
-                    #     Loss+=ID_loss
-                        # breakpoint()
+                #             # Extract batch size
+                #             B = preds.shape[0]
+
+                #             # Reshape to (B, 68, 128*128)
+                #             preds_flat = preds.view(B, 68, -1)
+                #             pred_swap_flat = pred_swap.view(B, 68, -1)
+
+                #             # Find argmax indices
+                #             preds_flat = torch.softmax(preds_flat, dim=-1)
+                #             pred_swap_flat = torch.softmax(pred_swap_flat, dim=-1)
+
+                #             breakpoint()
+                #             # Calculate x and y indices
+                #             # h, w = preds.shape[2], preds.shape[3]
+                #             # indices_x = argmax_indices // w
+                #             # indices_y = argmax_indices % w
+                #             # indices_x_swap = argmax_indices_swap // w
+                #             # indices_y_swap = argmax_indices_swap % w
+
+                #             # Stack x and y indices
+                #             # pred_coord = torch.stack((indices_x, indices_y), dim=-1).float()
+                #             # pred_swap_coord = torch.stack((indices_x_swap, indices_y_swap), dim=-1).float()
+                #             # breakpoint()
+                #             # Select landmarks 48:67 and calculate MSE loss
+                #             landmark_loss = mse_loss(preds_flat[:, 48:68, :], pred_swap_flat[:, 48:68, :])
+
+                #             # Add the loss to the total loss
+                #             Loss += landmark_loss 
+                            
+                #         except:
+                #             print("Error in Landmark Estimation")
                 ################################  
                 
                 
@@ -522,13 +599,17 @@ class DDIMSampler(object):
                 
                 
                 # breakpoint()
-                grad=torch.autograd.grad(-1*Loss, x_in)[0]
-                grad=grad*20.0
-                grad=grad[:,:4,:,:].detach()
-                e_t=e_t-sqrt_one_minus_at*grad
-                x_in=x_in.requires_grad_(False)
-                del pred_x0,pred_x0_im_masked,grad,x_in,masks,pred_x0_im
-                torch.set_grad_enabled(False)
+                if Loss!=0:
+                    grad=torch.autograd.grad(-1*Loss, x_in)[0]
+                    grad=grad*5.0
+                    grad=grad[:,:4,:,:].detach()
+                    e_t=e_t-sqrt_one_minus_at*grad
+                    x_in=x_in.requires_grad_(False)
+                    del pred_x0,pred_x0_im_masked,grad,x_in,masks,pred_x0_im
+                    torch.set_grad_enabled(False)
+                else:
+                    del pred_x0,pred_x0_im_masked,pred_x0_im
+                    torch.set_grad_enabled(False)
         else:
             pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
             
@@ -598,157 +679,7 @@ class DDIMSampler(object):
         
         Backward_guidance=True
         # current prediction for x_0
-        if x.shape[1]!=4:
-            pred_x0 = (x_in[:,:4,:,:] - sqrt_one_minus_at * e_t) / a_t.sqrt()
-            # G_id=ID_LOSS
-            seperate_sim=None
-            # src_im=None
-            
-            if src_im is not None and False:
-                pred_x0_im=self.model.differentiable_decode_first_stage(pred_x0)
-                masks=1-TF.resize(x_in[:,8,:,:],(pred_x0_im.shape[2],pred_x0_im.shape[3]))
-                #mask x_samples_ddim
-                pred_x0_im_masked=pred_x0_im*masks.unsqueeze(1)
-                # x_samples_ddim_masked=un_norm_clip(x_samples_ddim_masked)
-                # x_samples_ddim_masked = TF.normalize(x_samples_ddim_masked, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-                Loss=0
-                # breakpoint()
-                # im_rec=torch.clamp((pred_x0_im_masked + 1.0) / 2.0, min=0.0, max=1.0)
-                # im_tar=torch.clamp((tar + 1.0) / 2.0, min=0.0, max=1.0)
-                # im_src=torch.clamp(src_im, min=0.0, max=1.0)
-                
-                
-                # Segmentation Loss
-                ################################
-                src_mask  = (pred_x0_im + 1) / 2
-                src_mask  = TF.resize(src_mask,(512,512))
-                src_mask  = TF.normalize(src_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                targ_mask = (tar + 1) / 2
-                targ_mask  = TF.resize(targ_mask,(512,512))
-                targ_mask = TF.normalize(targ_mask, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                # breakpoint()
-                src_seg  = self.seg(self.spNorm(src_mask))[0]
-                # breakpoint()
-                src_seg = TF.resize(src_seg, (256, 256))
-                targ_seg = self.seg(self.spNorm(targ_mask))[0]
-                targ_seg = TF.resize(targ_seg, (256, 256))
-
-                seg_loss = torch.tensor(0).to(self.model.device).float()
-
-                # Attributes = [0, 'background', 1 'skin', 2 'r_brow', 3 'l_brow', 4 'r_eye', 5 'l_eye', 6 'eye_g', 7 'l_ear', 8 'r_ear', 9 'ear_r', 10 'nose', 11 'mouth', 12 'u_lip', 13 'l_lip', 14 'neck', 15 'neck_l', 16 'cloth', 17 'hair', 18 'hat']
-                ids = [11, 12, 13]
-
-                for id in ids:
-                    seg_loss += l1_loss(src_seg[:,id,:,:], targ_seg[:,id,:,:])
-                    # seg_loss += mse_loss(src_seg[0,id,:,:], targ_seg[0,id,:,:])
-
-                Loss = Loss + seg_loss * 200
-                ################################
-                
-                #3DMM Loss
-                ################################
-                # im_rec=(pred_x0_im_masked + 1.0) / 2.0
-                
-                # #resize im_tar to 512x512
-                
-                # im_tar=(tar + 1.0) / 2.0
-                # im_src=TF.resize(src_im,(512,512))
-                
-                # im_conc=torch.cat((im_rec,im_tar,im_src),dim=0)
-                # c_all=self.models_3dmm.net_recon(im_conc)
-                # c_rec=c_all[:b]
-                # c_tar=c_all[b:2*b]
-                # c_src=c_all[2*b:]
-                
-                
-                # # breakpoint()
-                # # c_rec=self.models_3dmm.net_recon(im_rec)
-                # # c_tar=self.models_3dmm.net_recon(im_tar)
-                # # c_src=self.models_3dmm.net_recon(im_src)
-                
-                # target_filt_c_rec=c_rec[:, 80:144]
-                # target_filt_c_tar=c_tar[:, 80:144]
-                
-                # #select 0:80 and 144:224
-                # src_filt_c_rec=torch.cat((c_rec[:, :80],c_rec[:, 144:224]),dim=1)
-                # src_filt_c_src=torch.cat((c_src[:, :80],c_src[:, 144:224]),dim=1)
-                
-                
-                # # src_filt_c_rec=c_rec[:, 144:224]
-                # # src_filt_c_src=c_src[:, 144:224]
-                
-                
-                # # id_coeffs = coeffs[:, :80]
-                # # exp_coeffs = coeffs[:, 80: 144]
-                # # tex_coeffs = coeffs[:, 144: 224]
-                # # angles = coeffs[:, 224: 227]
-                # # gammas = coeffs[:, 227: 254]
-                # # translations = coeffs[:, 254:]
-                        
-                # # cosine loss between the two reconstructions
-                # # cosine_loss =1- torch.nn.functional.cosine_similarity(target_filt_c_rec, target_filt_c_tar, dim=1)
-                
-                # # cosine_loss =1- torch.nn.functional.cosine_similarity(src_filt_c_rec, src_filt_c_src, dim=1)
-                # cosine_loss_tar=1- torch.nn.functional.cosine_similarity(target_filt_c_rec, target_filt_c_tar, dim=1)
-                # # L2_loss = mse_loss(src_filt_c_rec, src_filt_c_src)
-                
-                # Loss+=cosine_loss_tar.sum()*100.0
-                # # +cosine_loss_tar.sum()*100.0
-                ################################
-                
-                #ID LOSS and GAZE Loss
-                ################################
-                # if t[0]<10 or t[0]>200:
-                #     src_im=TF.normalize(src_im, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-                #     ID_loss,_,seperate_sim=self.model.face_ID_model(pred_x0_im_masked,src_im,clip_img=False,return_seperate=True)
-                #     Loss+=ID_loss
-                # # breakpoint()
-                
-                if t[0]>10 and t[0]<300:
-                    try:
-                        src_eye = pred_x0_im_masked * 0.5 + 0.5
-                        targ_eye = tar
-                        targ_eye = targ_eye * 0.5 + 0.5
-                        llx, lly, lrx, lry, rlx, rly, rrx, rry = get_eye_coords(self.fa, targ_eye)
-                        # breakpoint()
-                        if llx is not None:
-                            targ_left_eye   = targ_eye[:, :, lly:lry, llx:lrx]
-                            src_left_eye    = src_eye[:, :, lly:lry, llx:lrx]
-                            targ_right_eye  = targ_eye[:, :, rly:rry, rlx:rrx]
-                            src_right_eye   = src_eye[:, :, rly:rry, rlx:rrx]
-                            targ_left_eye   = torch.mean(targ_left_eye, dim=1, keepdim=True)
-                            src_left_eye    = torch.mean(src_left_eye, dim=1, keepdim=True)
-                            targ_right_eye  = torch.mean(targ_right_eye, dim=1, keepdim=True)
-                            src_right_eye   = torch.mean(src_right_eye, dim=1, keepdim=True)
-                            targ_left_gaze  = self.netGaze(targ_left_eye.squeeze(0))
-                            src_left_gaze   = self.netGaze(src_left_eye.squeeze(0))
-                            targ_right_gaze = self.netGaze(targ_right_eye.squeeze(0))
-                            src_right_gaze  = self.netGaze(src_right_eye.squeeze(0))
-                            left_gaze_loss  = l1_loss(targ_left_gaze, src_left_gaze)
-                            right_gaze_loss = l1_loss(targ_right_gaze, src_right_gaze)
-                            gaze_loss = (left_gaze_loss + right_gaze_loss) * 1
-
-                        Loss+=gaze_loss.sum()
-                    except:
-                        print("Error in Gaze Estimation")
-                    # else:
-                    #     ID_loss,_,seperate_sim=self.model.face_ID_model(pred_x0_im_masked,src_im,clip_img=False,return_seperate=True)
-                    #     Loss+=ID_loss
-                        # breakpoint()
-                ################################  
-                
-                
-                
-                
-                
-                # breakpoint()
-                grad=torch.autograd.grad(-1*Loss, x_in)[0]
-                grad=grad*20.0
-                grad=grad[:,:4,:,:].detach()
-                e_t=e_t-sqrt_one_minus_at*grad
-                x_in=x_in.requires_grad_(False)
-                del pred_x0,pred_x0_im_masked,grad,x_in,masks,pred_x0_im
-                torch.set_grad_enabled(False)
+        
         if Backward_guidance:
             pred_x0 = (x_in[:,:4,:,:] - sqrt_one_minus_at * e_t) / a_t.sqrt()
             recons_image=self.model.differentiable_decode_first_stage(pred_x0)

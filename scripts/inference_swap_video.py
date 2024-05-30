@@ -19,6 +19,7 @@ from ldm.util import instantiate_from_config
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.models.diffusion.plms import PLMSSampler
 import albumentations as A
+import torchvision.transforms as transforms
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 from moviepy.editor import AudioFileClip, VideoFileClip
 import proglog
@@ -57,6 +58,15 @@ safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
 #set cuda device 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+def get_tensor(normalize=True, toTensor=True):
+    transform_list = []
+    if toTensor:
+        transform_list += [torchvision.transforms.ToTensor()]
+
+    if normalize:
+        transform_list += [torchvision.transforms.Normalize((0.5, 0.5, 0.5),
+                                                (0.5, 0.5, 0.5))]
+    return torchvision.transforms.Compose(transform_list)
 
 def crop_and_align_face(target_files):
     image_size = 1024
@@ -483,7 +493,7 @@ def main():
                     print('error finding face at', frame_index)
                     pass
         # save inv_transforms_all
-        np.save(os.path.join(outpath,  target_video_name+'_inv_transforms.npy'), inv_transforms_all)
+        np.save(os.path.join(Base_path,  target_video_name+'_inv_transforms.npy'), inv_transforms_all)
         
     # load inv_transforms_all
     inv_transforms_all=np.load(os.path.join(Base_path,  target_video_name+'_inv_transforms.npy'), allow_pickle=True)
@@ -492,6 +502,7 @@ def main():
     
     
     ################### Get reference
+    conf_file=OmegaConf.load(opt.config)
     trans=A.Compose([
             A.Resize(height=224,width=224)])
     ref_img_path = src_image_new
@@ -506,7 +517,7 @@ def main():
 
     # Create a mask to preserve values in the 'preserve' list
     # preserve = [1,2,4,5,8,9,17 ]
-    preserve = [1,2,3,4,5,6,7,8,9]
+    preserve = conf_file.data.params.test.params['preserve_mask_src_FFHQ']
     # preserve = [1,2,4,5,8,9 ]
     ref_mask= np.isin(ref_mask_img, preserve)
 
@@ -516,24 +527,27 @@ def main():
     ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
     # convert to PIL image
     
-    
-    ref_mask_img=Image.fromarray(ref_img).convert('L')
-    ref_mask_img_r = ref_converted_mask.resize(img_p_np.shape[1::-1], Image.NEAREST)
-    ref_mask_img_r = np.array(ref_mask_img_r)
-    # ref_img[ref_mask_img_r==0]=0
-    
+    #Gray Mask
+    reference_mask_tensor=get_tensor(normalize=False, toTensor=True)(ref_converted_mask)
+    mask_ref=transforms.Resize((224,224))(reference_mask_tensor)
     ref_img=trans(image=ref_img)
     ref_img=Image.fromarray(ref_img["image"])
     ref_img=get_tensor_clip()(ref_img)
-    
+    ref_img=ref_img*mask_ref
     ref_image_tensor = ref_img.to(device,non_blocking=True).to(torch.float16).unsqueeze(0)
+    
+    #Black_mask
+    # ref_mask_img=Image.fromarray(ref_img).convert('L')
+    # ref_mask_img_r = ref_converted_mask.resize(img_p_np.shape[1::-1], Image.NEAREST)
+    # ref_mask_img_r = np.array(ref_mask_img_r)
+    # ref_img[ref_mask_img_r==0]=0
+    # ref_img=trans(image=ref_img)
+    # ref_img=Image.fromarray(ref_img["image"])
+    # ref_img=get_tensor_clip()(ref_img)
+    # ref_image_tensor = ref_img.to(device,non_blocking=True).to(torch.float16).unsqueeze(0)
     ########################
     
 
-    # test_dataset=COCOImageDataset(test_bench_dir='test_bench') 
-    #read config file :configs/v2.yaml
-    conf_file=OmegaConf.load(opt.config)
-    # breakpoint()
     test_args=conf_file.data.params.test.params
     
     
@@ -573,24 +587,12 @@ def main():
             with model.ema_scope():
                 all_samples = list()
   
-                c2=0
-                c1=0
-                if model.ID_weight>0:
-                    c2=model.face_ID_model.extract_feats(ref_image_tensor)[0]
-                    c2 = model.ID_proj_out(c2) #-->c:[4,768]
-                    c2 = c2.unsqueeze(1) #-->c:[4,1,768]
-                if model.clip_weight>0:
-                    c1 = model.get_learned_conditioning(ref_image_tensor) #-->c:[4,1,1024]
-                    c1 = model.proj_out(c1) #-->c:[4,1,768]
-                
-                    
-                
                 for test_batch,prior, test_model_kwargs,segment_id_batch in test_dataloader:
-                    
-                    # if sample<1500:
+                    sample+=opt.n_samples
+                    # if sample<980:
                     #     continue
                     if opt.Start_from_target:
-                        
+                        print("Starting from target....")
                         x=test_batch
                         x=x.to(device)
                         encoder_posterior = model.encode_first_stage(x)
@@ -598,7 +600,7 @@ def main():
                         t=int(opt.target_start_noise_t)
                         # t = torch.ones((x.shape[0],), device=device).long()*t
                         t = torch.randint(t-1, t, (x.shape[0],), device=device).long()
-                  
+                    
                         if use_prior:
                             prior=prior.to(device)
                             encoder_posterior_2=model.encode_first_stage(prior)
@@ -608,9 +610,7 @@ def main():
                             start_code = x_noisy
                             # print('start from target')
                         else:
-                            
                             noise = torch.randn_like(z)
-                
                             x_noisy = model.q_sample(x_start=z, t=t, noise=noise)
                             start_code = x_noisy
                         # print('start from target')
@@ -619,36 +619,48 @@ def main():
                     uc = None
                     if opt.scale != 1.0:
                         uc = model.learnable_vector.repeat(test_batch.shape[0],1,1)
+                        if model.stack_feat:
+                            uc2=model.other_learnable_vector.repeat(test_batch.shape[0],1,1)
+                            uc=torch.cat([uc,uc2],dim=-1)
+                    
                     # c = model.get_learned_conditioning(test_model_kwargs['ref_imgs'].squeeze(1).to(torch.float16))
-                    
                     landmarks=model.get_landmarks(test_batch) if model.Landmark_cond else None
+                    ref_imgs=ref_image_tensor
+                    # stack it ref_imgs to the shape of test_batch
+                    ref_imgs=ref_imgs.repeat(test_batch.shape[0],1,1,1)
                     
-                    c=model.conditioning_with_feat_given_features(landmarks=landmarks,c2=c2,c=c1).float()
+                    c=model.conditioning_with_feat(ref_imgs.squeeze(1).to(torch.float32),landmarks=landmarks,tar=test_batch.to("cuda").to(torch.float32)).float()
+                    if (model.land_mark_id_seperate_layers or model.sep_head_att) and opt.scale != 1.0:
+            
+                        # concat c, landmarks
+                        landmarks=landmarks.unsqueeze(1) if len(landmarks.shape)!=3 else landmarks
+                        uc=torch.cat([uc,landmarks],dim=-1)
                     
                     
                     if c.shape[-1]==1024:
                         c = model.proj_out(c)
                     if len(c.shape)==2:
                         c = c.unsqueeze(1)
-                    # inpaint_image=test_model_kwargs['inpaint_image']
-                    # inpaint_mask=test_model_kwargs['inpaint_mask']
+                    inpaint_image=test_model_kwargs['inpaint_image']
+                    inpaint_mask=test_model_kwargs['inpaint_mask']
                     z_inpaint = model.encode_first_stage(test_model_kwargs['inpaint_image'])
                     z_inpaint = model.get_first_stage_encoding(z_inpaint).detach()
                     test_model_kwargs['inpaint_image']=z_inpaint
                     test_model_kwargs['inpaint_mask']=Resize([z_inpaint.shape[-1],z_inpaint.shape[-1]])(test_model_kwargs['inpaint_mask'])
 
                     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+                    # breakpoint()
                     samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
                                                         conditioning=c,
-                                                        batch_size=opt.n_samples,
+                                                        batch_size=test_batch.shape[0],
                                                         shape=shape,
                                                         verbose=False,
                                                         unconditional_guidance_scale=opt.scale,
                                                         unconditional_conditioning=uc,
                                                         eta=opt.ddim_eta,
                                                         x_T=start_code,
-                                                        test_model_kwargs=test_model_kwargs)
-
+                                                        test_model_kwargs=test_model_kwargs,src_im=ref_imgs.squeeze(1).to(torch.float32),tar=test_batch.to("cuda"))
+                    # breakpoint()
                     x_samples_ddim = model.decode_first_stage(samples_ddim)
                     x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
                     x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
