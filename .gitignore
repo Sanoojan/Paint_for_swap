@@ -47,3 +47,11 @@ models_from_114/*
 train.sh
 
 Quantitative_Grad_all/*
+results_FINAL/*
+examples/FaceSwap_10/*
+Quantitative_FINAL/*
+results_FFHQ_FINAL/*
+Save_intermediates/*
+results_FINAL_Steps/*
+DiffSwap_results/*
+Aligned/*
