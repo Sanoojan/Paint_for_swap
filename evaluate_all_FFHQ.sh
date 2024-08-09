@@ -26,11 +26,11 @@ Write_results="Quantitative_Grad_Other_swappers/FFHQ"
 declare -a names=(  
                     # "/home/sanoojan/other_swappers/MegaFs/FFHQ_outs"
                     # "/home/sanoojan/other_swappers/hififace/FFHQ_results"
-                    # "/home/sanoojan/e4s/Results/testbench/results_on_FFHQ_orig_ckpt/results"                
+                    "/home/sanoojan/e4s/Results/testbench/results_on_FFHQ_orig_ckpt/results"                
                     # "/home/sanoojan/other_swappers/SimSwap/output/FFHQ/results"
                     # "/home/sanoojan/other_swappers/FaceDancer/FaceDancer_c_HQ-FFHQ/results"
                     "/home/sanoojan/other_swappers/DiffSwap/all_images_with_folders_named_2_FFHQ"
-                    "/home/sanoojan/other_swappers/DiffFace/results/FFHQ/results"
+                    # "/home/sanoojan/other_swappers/DiffFace/results/FFHQ/results"
                     )
 
 
@@ -67,25 +67,26 @@ do
         echo "Directory already exists: $Write_results_n"
     fi
 
-    echo "FID score with Source:"   >> "$output_filename"
-    CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-        "${source_path}" \
-        "${Results_out}"  >> "$output_filename"
+    # echo "FID score with Source:"   >> "$output_filename"
+    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+    #     "${source_path}" \
+    #     "${Results_out}"  >> "$output_filename"
 
-    echo "FID score with Dataset:" >> "$output_filename"
-    CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-        "${Dataset_path}" \
-        "${Results_out}"  >> "$output_filename"
+    # echo "FID score with Dataset:" >> "$output_filename"
+    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+    #     "${Dataset_path}" \
+    #     "${Results_out}"  >> "$output_filename"
 
-    echo "Pose comarison with target:" >> "$output_filename"
-    CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
-        "${target_path}" \
-        "${Results_out}"  >> "$output_filename"
+    # echo "Pose comarison with target:" >> "$output_filename"
+    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
+    #     "${target_path}" \
+    #     "${Results_out}"  >> "$output_filename"
 
     echo "Expression comarison with target:" >> "$output_filename"
     CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_face_recon.py --device cuda \
         "${target_path}" \
-        "${Results_out}"  >> "$output_filename"
+        "${Results_out}" 
+        # >> "$output_filename"
 
     echo "ID similarity with Target:" >> "$output_filename"
     CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \

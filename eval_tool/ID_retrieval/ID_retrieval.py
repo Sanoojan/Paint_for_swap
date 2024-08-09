@@ -329,9 +329,9 @@ def compute_features(files,mask_files, model,other_model, batch_size=50, dims=20
             # x = x[:, :, 35:223, 32:220]  # (2) Crop interesting region
             # x = face_pool_2(x) # (3) resize to 112 to fit pre-trained model
             # breakpoint()
-            # pred = model(batch )
+            pred = model(batch)
             
-            pred=IDLoss_model.extract_feats(batch)[-1]
+            # pred=IDLoss_model.extract_feats(batch)[-1]
             
             
         # breakpoint()
@@ -442,6 +442,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
     top5 = top5_correct / len(swap_lab)  # Top-5 accuracy
     # breakpoint()
     # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
+    # breakpoint()
     feat_sel=feat1[swap_lab]
     feat_sel=feat_sel/np.linalg.norm(feat_sel,axis=1,keepdims=True)
     feat2=feat2/np.linalg.norm(feat2,axis=1,keepdims=True)

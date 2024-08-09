@@ -233,7 +233,7 @@ def main():
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="/home/sanoojan/Paint_for_swap/models/Paint-by-Example/finetune/PBE/celebA/2023-09-13T22-14-47_v2/checkpoints/last.ckpt",
+        default="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/models/Paint-by-Example/finetune/PBE/celebA/2023-09-13T22-14-47_v2/checkpoints/last.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(

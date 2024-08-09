@@ -17,9 +17,12 @@
 # Results_out="results/v4_reconstruct_img_train_correct_id/results"       # 11.7,24,8,0.31
 # Results_out="results/v4_reconstruct_img_train_correct_id_from_reenact/results"    # 15.4,32.1,0.33
 # Results_out="results/v4_reconstruct_img_train_2_step_ep_38/results"
+Results_out="/home/sanoojan/other_swappers/DiffSwap/all_images_with_folders_named_2_celeba_20"
+# Results_out="/home/sanoojan/other_swappers/DiffFace/results/Celeba_20/results"
 res_end="results"
 results_start="results_grad"
 Write_results="Quantitative_Grad_all"
+device=0
 
 # declare -a names=("avg_3_features_full_face_with_augs_scale1"
 #                     "check"
@@ -80,39 +83,41 @@ Write_results="Quantitative_Grad_all"
 #                     "12_reconstruct_img_train_correct_sep_head_att"
 #                      )
 
-declare -a names=("50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image_ep06"
-                        "50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image_ep09"
-                        "50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image_ep12"
-                        "50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image_ep20"
-                        "v4_2_step_LPIPS_stack_ep10"
-                        "v4_2_step_LPIPS_stack_ep2"
-                        "v4_2_step_LPIPS_stack_ep3"
-                        "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_17"
-                        "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_19"
-                        "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_20"
-                        "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_21"
-                        "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_23"
-                        "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_24"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_DDIM"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_DDIM_2step"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep10"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep11"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep12"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep13"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_clip_disentanglement_test"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_target_clip_feat"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_target_clip_feat_dissentangle_test_1"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_target_eye_mth_scale1"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_target_eye_mth_scale5"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_with_src_hair"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep3"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep5"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep6"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep7"
-                        "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep9"
-                    )
+# declare -a names=("50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image_ep06"
+#                         "50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image_ep09"
+#                         "50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image_ep12"
+#                         "50_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_noclip_same_image_ep20"
+#                         "v4_2_step_LPIPS_stack_ep10"
+#                         "v4_2_step_LPIPS_stack_ep2"
+#                         "v4_2_step_LPIPS_stack_ep3"
+#                         "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_17"
+#                         "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_19"
+#                         "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_20"
+#                         "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_21"
+#                         "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_23"
+#                         "v4_img_train_2_step_multi_false_UN_NORM_CLIP_CORRECT_LPIPS_ep_24"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_DDIM"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_DDIM_2step"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep10"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep11"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep12"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep13"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_clip_disentanglement_test"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_target_clip_feat"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_target_clip_feat_dissentangle_test_1"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_target_eye_mth_scale1"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_target_eye_mth_scale5"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_with_src_hair"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep3"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep5"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep6"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep7"
+#                         "v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep9"
+#                     )
+
+
 
 # Set variables
 # name="avg_3_features_full_face_with_augs_scale1"
@@ -131,111 +136,115 @@ source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
 target_mask_path="dataset/FaceData/CelebAMask-HQ/target_mask"
 Dataset_path="dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img"
 
-for name in "${names[@]}"
-do
-    Results_out="${results_start}/${name}/${res_end}"
-    current_time=$(date +"%Y%m%d_%H%M%S")
-    Write_results_n="${Write_results}/${name}"
-    output_filename="${Write_results_n}/out_${current_time}.txt"
+# for name in "${names[@]}"
+# do
+#     Results_out="${results_start}/${name}/${res_end}"
+#     current_time=$(date +"%Y%m%d_%H%M%S")
+#     Write_results_n="${Write_results}/${name}"
+#     output_filename="${Write_results_n}/out_${current_time}.txt"
     
-    if [ ! -d "$Write_results_n" ]; then
-        mkdir -p "$Write_results_n"
-        echo "Directory created: $Write_results_n"
-    else
-        echo "Directory already exists: $Write_results_n"
-    fi
+#     if [ ! -d "$Write_results_n" ]; then
+#         mkdir -p "$Write_results_n"
+#         echo "Directory created: $Write_results_n"
+#     else
+#         echo "Directory already exists: $Write_results_n"
+#     fi
 
-    # Run FID score calculation
-    # ... (rest of your script)
-    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-    #     "${source_path}" \
-    #     "${Results_out}"  >> "$output_filename"
+#     # Run FID score calculation
+#     # ... (rest of your script)
+#     CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+#         "${source_path}" \
+#         "${Results_out}"  >> "$output_filename"
 
-    # echo "FID score with Dataset:"
+#     # echo "FID score with Dataset:"
+#     CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+#         "${Dataset_path}" \
+#         "${Results_out}"  >> "$output_filename"
+
+#     # echo "Pose comarison with target:"
+#     CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
+#         "${target_path}" \
+#         "${Results_out}"  >> "$output_filename"
+
+
+#     # echo "ID similarity with Target:"
+#     CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+#         "${target_path}" \
+#         "${Results_out}" \
+#         "${target_mask_path}" \
+#         "${target_mask_path}" >> "$output_filename"  
+
+#     # echo "ID_restoreformer"
+#     CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
+#         "${Results_out}" \
+#         --gt_folder "${source_path}" >> "$output_filename"  
+
+#     echo "Expression comarison with target:"
+#     CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_face_recon.py --device cuda \
+#         "${target_path}" \
+#         "${Results_out}"  >> "$output_filename"
+
+
+#     echo "ID similarity with Source:"
+#     CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+#         "${source_path}" \
+#         "${Results_out}" \
+#         "${source_mask_path}" \
+#         "${target_mask_path}"  \
+#         --print_sim True  >> "$output_filename"  
+# done
+
+
+    output_filename="${Write_results}/out_${current_time}.txt"
+
+    echo "FID score with Source:"   >> "$output_filename"       
+    CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
+        "${source_path}" \
+        "${Results_out}"  >> "$output_filename"
+
+    echo "FID score with Dataset:" >> "$output_filename"
     CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
         "${Dataset_path}" \
         "${Results_out}"  >> "$output_filename"
 
-    # echo "Pose comarison with target:"
+    echo "Pose comarison with target:" >> "$output_filename"
     CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
         "${target_path}" \
         "${Results_out}"  >> "$output_filename"
 
-
-    # echo "ID similarity with Target:"
-    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
-    #     "${target_path}" \
-    #     "${Results_out}" \
-    #     "${target_mask_path}" \
-    #     "${target_mask_path}" >> "$output_filename"  
-
-    # echo "ID_restoreformer"
-    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
-    #     "${Results_out}" \
-    #     --gt_folder "${source_path}" >> "$output_filename"  
-
-    echo "Expression comarison with target:"
+    echo "Expression comarison with target:" >> "$output_filename"
     CUDA_VISIBLE_DEVICES=${device} python eval_tool/Expression/expression_compare_face_recon.py --device cuda \
         "${target_path}" \
-        "${Results_out}"  >> "$output_filename"
+        "${Results_out}" >> "$output_filename"
 
+    echo "ID similarity with Target:" >> "$output_filename"
+    CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+        "${target_path}" \
+        "${Results_out}" \
+        "${target_mask_path}" \
+        "${target_mask_path}"  >> "$output_filename"  
 
-    echo "ID similarity with Source:"
+    echo "ID_restoreformer" >> "$output_filename"
+    CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
+        "${Results_out}" \
+        --gt_folder "${source_path}"   >> "$output_filename"  
+
+    echo "ID similarity with Source using cosface:" >> "$output_filename"
     CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
         "${source_path}" \
         "${Results_out}" \
         "${source_mask_path}" \
-        "${target_mask_path}"  \
-        --print_sim True  >> "$output_filename"  
-done
+        "${target_mask_path}" \
+        --print_sim True  >> "$output_filename"   
 
 
-# output_filename="${Write_results}/out_${current_time}.txt"
-
-# if [ ! -d "$Write_results" ]; then
-#     mkdir -p "$Write_results"
-#     echo "Directory created: $Write_results"
-# else
-#     echo "Directory already exists: $Write_results"
-# fi
-
-
-    # Run FID score calculation
-
-    # echo "FID score with Source:"
-    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-    #     "${source_path}" \
-    #     "${Results_out}"  >> "$output_filename"
-
-    # echo "FID score with Dataset:"
-    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/fid/fid_score.py --device cuda \
-    #     "${Dataset_path}" \
-    #     "${Results_out}"  >> "$output_filename"
-
-    # echo "Pose comarison with target:"
-    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/Pose/pose_compare.py --device cuda \
-    #     "${target_path}" \
-    #     "${Results_out}"  >> "$output_filename"
-
-
-    # echo "ID similarity with Target:"
-    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
-    #     "${target_path}" \
-    #     "${Results_out}" \
-    #     "${target_mask_path}" \
-    #     "${target_mask_path}" >> "$output_filename"  
-
-    # echo "ID_restoreformer"
-    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_distance.py  \
-    #     "${Results_out}" \
-    #     --gt_folder "${source_path}" >> "$output_filename"  
-
-    echo "ID similarity with Source:"
-    # CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
-    #     "${source_path}" \
-    #     "${Results_out}" \
-    #     "${source_mask_path}" \
-    #     "${target_mask_path}"  \
-    #     --print_sim True  >> "$output_filename"  
+    echo "ID similarity with Source using Arcface:" >> "$output_filename"
+    CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --device cuda \
+        "${source_path}" \
+        "${Results_out}" \
+        "${source_mask_path}" \
+        "${target_mask_path}" \
+        --print_sim True  \
+        --arcface True >> "$output_filename" 
 
  

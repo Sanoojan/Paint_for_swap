@@ -61,7 +61,7 @@ parser.add_argument('--device', type=str, default=None,
 #                     help=('Dimensionality of Inception features to use. '
 #                           'By default, uses pool3 features'))
 parser.add_argument('path', type=str, nargs=2,
-                    default=['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results'],
+                    default=['/share/data/drive_3/Sanoojan/needed/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results'],
                     help=('Paths to the generated images or '
                           'to .npz statistic files'))
 
@@ -275,8 +275,15 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
         numbers =[[int(par) for par in part if par.isdigit()] for part in parts]
         
         numbers= [ num[-1] for num in numbers if len(num)>0]
-        if numbers[0]>27500: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
-            numbers = [num-28000 for num in numbers] # celeb
+        mi_num= min(numbers)
+        # breakpoint()
+        # if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
+        numbers = [(num - mi_num) for num in numbers] # celeb
+        # breakpoint()
+        # if numbers[0]>27500 and numbers[0]<30000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
+        #     numbers = [num-28000 for num in numbers] # celeb
+        # else:
+        #     numbers = [num-68000 for num in numbers]
         
         pred_arr = compute_features(files, model, batch_size,
                                                dims, device, num_workers)
@@ -309,6 +316,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     
     # breakpoint()
     # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
+    # breakpoint()
     feat1=feat1[swap_lab]
     # find l2 distance
     dist = np.linalg.norm(feat1-feat2,axis=1)

@@ -292,7 +292,7 @@ def main():
     parser.add_argument(
         "--n_samples",
         type=int,
-        default=10,
+        default=12,
         help="how many samples to produce for each given prompt. A.k.a. batch size",
     )
     parser.add_argument(
@@ -317,7 +317,7 @@ def main():
         "--src_folder",
         type=str,
         help="src_image",
-        default="/home/sanoojan/Paint_for_swap/examples/faceswap/source.jpg"
+        default="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/examples/faceswap/source.jpg"
     )
     parser.add_argument(
         "--src_image_mask",

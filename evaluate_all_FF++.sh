@@ -55,7 +55,7 @@ for name in "${names[@]}"
 do
     # Results_out="${results_start}/${name}/${res_end}"
     # Results_out="${name}/${res_end}"
-    Results_out="${name}"
+    # Results_out="${name}"
     current_time=$(date +"%Y%m%d_%H%M%S")
     Write_results_n="${Write_results}/${name}"
     output_filename="${Write_results_n}/out_${current_time}.txt"

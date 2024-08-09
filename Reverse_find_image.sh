@@ -4,7 +4,7 @@ name="v4_reconstruct_img_train_correct_id"
 Results_dir="results/${name}"
 Results_out="results/${name}/results"
 Write_results="results/quantitative/P4s/${name}"
-device=0
+device=3
 
 CONFIG="configs/v4_reconstruct_img_train_correct.yaml"
 CKPT="models/Paint-by-Example/v4_reconstruct_img_train_correct_id/PBE/celebA/2023-11-05T18-28-26_v4_reconstruct_img_train_correct/checkpoints/last.ckpt"
@@ -15,6 +15,7 @@ target_mask_path="dataset/FaceData/CelebAMask-HQ/target_mask"
 Dataset_path="dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img"
 Dataset_path="dataset/FaceData/FFHQ/images512"
 Dataset_path="dataset/FaceData/CelebAMask-HQ/Val"
+Dataset_path="dataset/FaceData/FFHQ/Val"
 
 
 current_time=$(date +"%Y%m%d_%H%M%S")

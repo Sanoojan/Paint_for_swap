@@ -179,7 +179,7 @@ def main():
         "--src_image",
         type=str,
         help="src_image",
-        default="/home/sanoojan/Paint_for_swap/examples/faceswap/source.jpg"
+        default="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/examples/faceswap/source.jpg"
     )
     parser.add_argument(
         "--src_image_mask",
@@ -240,7 +240,7 @@ def main():
     Image_path_='dataset/FaceData/CelebAMask-HQ/Val_target'
     second_path_='/home/sanoojan/e4s/Results/testbench/reenact/results'
     mask_path_='dataset/FaceData/CelebAMask-HQ/target_mask'
-    save_path_='/home/sanoojan/Paint_for_swap/intermediate_renact/results'
+    save_path_='/share/data/drive_3/Sanoojan/needed/Paint_for_swap/intermediate_renact/results'
     # get image list
     # image_list = glob.glob(os.path.join(Image_path, '*.png'))
 

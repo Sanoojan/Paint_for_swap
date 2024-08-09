@@ -1,13 +1,13 @@
 
 # Set variables
-name="24_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_src_features_ep7"
-Results_dir="results_grad/${name}"
-Results_out="results_grad/${name}/results"
-Write_results="Quantitative_grad/P4s/${name}"
-device=4
+name="v5_Two_CLIP_proj_154_ep_3.5_5"
+Results_dir="results_FINALS/${name}"
+Results_out="results_FINALS/${name}/results"
+Write_results="Quantitative_FINALS/P4s/${name}"
+device=3
 
-CONFIG="models/Paint-by-Example/Final_src_clip_ID_features_Text_eq_emb_stable_diff/PBE/celebA/2024-02-24T17-26-24_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_src_features/configs/2024-02-24T17-26-24-project.yaml"
-CKPT="models/Paint-by-Example/Final_src_clip_ID_features_Text_eq_emb_stable_diff/PBE/celebA/2024-02-24T17-26-24_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_src_features/checkpoints/last.ckpt"
+CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project.yaml"
+CKPT="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt"
 source_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
@@ -30,11 +30,11 @@ CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --outdir "${Results_dir}" \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
-    --scale 5 \
+    --scale 3.5 \
     --n_samples 10 \
     --device_ID ${device} \
     --dataset "CelebA" \
-    --ddim_steps 50
+    --ddim_steps 5
 
 
     # --Start_from_target \
@@ -93,3 +93,6 @@ CUDA_VISIBLE_DEVICES=${device} python eval_tool/ID_retrieval/ID_retrieval.py --d
     --arcface True >> "$output_filename"   
 
 
+now_time=$(date +"%Y%m%d_%H%M%S")
+elapsed_time=$(($(date -d $now_time +%s) - $(date -d $current_time +%s)))
+echo "Elapsed time in minutes: $((elapsed_time / 60))" >> "$output_filename"

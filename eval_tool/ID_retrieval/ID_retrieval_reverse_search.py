@@ -66,7 +66,7 @@ parser.add_argument('--mask', type=bool, default=True,
 #                     help=('Dimensionality of Inception features to use. '
 #                           'By default, uses pool3 features'))
 parser.add_argument('path', type=str, nargs=4,
-                    default=['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results','dataset/FaceData/CelebAMask-HQ/src_mask','dataset/FaceData/CelebAMask-HQ/target_mask'],
+                    default=['/share/data/drive_3/Sanoojan/needed/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results','dataset/FaceData/CelebAMask-HQ/src_mask','dataset/FaceData/CelebAMask-HQ/target_mask'],
                     help=('Paths to the generated images or '
                           'to .npz statistic files'))
 
@@ -432,7 +432,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     # CosFace = iresnet100()
     
     
-    cosface_state_dict = torch.load('/home/sanoojan/Paint_for_swap/eval_tool/Face_rec_models/cosface/net_sphere20_data_vggface2_acc_9955.pth')
+    cosface_state_dict = torch.load('/share/data/drive_3/Sanoojan/needed/Paint_for_swap/eval_tool/Face_rec_models/cosface/net_sphere20_data_vggface2_acc_9955.pth')
     CosFace = cosface.sphere().cuda()
     
     
@@ -462,6 +462,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
     # breakpoint()
     dot_prod= np.dot(feat2,feat1.T)
     pred= np.argmax(dot_prod,axis=1)
+    print(pred)
     # find accuracy of top 1 and top 5
     top1 = np.sum(np.argmax(dot_prod,axis=1)==swap_lab)/len(swap_lab)
     

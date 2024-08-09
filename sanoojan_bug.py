@@ -30,7 +30,7 @@ def un_norm(x):
     # x = x.clone()
     return (x+1.0)/2.0
  
-def save_clip_img(img2, path="/home/sanoojan/Paint_for_swap/Debug/OUT.png",clip=True):
+def save_clip_img(img2, path="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/Debug/OUT.png",clip=True):
     if clip:
         img=un_norm_clip(img2)
     else:
@@ -44,7 +44,7 @@ def save_clip_img(img2, path="/home/sanoojan/Paint_for_swap/Debug/OUT.png",clip=
     
 def read_image_to_tensor():
     # read image from disk using PIL
-    img = Image.open("/home/sanoojan/Paint_for_swap/Debug/0rec.png")
+    img = Image.open("/share/data/drive_3/Sanoojan/needed/Paint_for_swap/Debug/0rec.png")
     # convert image to torch tensor
     img_tensor = torch.tensor(np.array(img)).permute(2, 0, 1).float() / 255.0
     # img_tensor = img_tensor
@@ -57,9 +57,9 @@ def read_image_to_tensor():
 
 
 x=read_image_to_tensor()
-save_clip_img(x, path="/home/sanoojan/Paint_for_swap/Debug/OUT1.png",clip=True)
-save_clip_img(x, path="/home/sanoojan/Paint_for_swap/Debug/OUT2.png",clip=False)
-save_clip_img(x, path="/home/sanoojan/Paint_for_swap/Debug/OUT3.png",clip=True)
-save_clip_img(x, path="/home/sanoojan/Paint_for_swap/Debug/OUT4.png",clip=False)
+save_clip_img(x, path="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/Debug/OUT1.png",clip=True)
+save_clip_img(x, path="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/Debug/OUT2.png",clip=False)
+save_clip_img(x, path="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/Debug/OUT3.png",clip=True)
+save_clip_img(x, path="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/Debug/OUT4.png",clip=False)
 print("Reading image")
 print("Image read")

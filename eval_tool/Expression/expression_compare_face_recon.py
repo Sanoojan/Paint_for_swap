@@ -315,9 +315,12 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
         # Filter out non-numeric parts and convert to integers
         numbers =[[int(par) for par in part if par.isdigit()] for part in parts]
         
-        numbers= [ num[-1] for num in numbers if len(num)>0]
-        if numbers[0]>27500: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
-            numbers = [num-28000 for num in numbers] # celeb
+        # numbers= [ num[-1] for num in numbers if len(num)>0]
+        numbers= [ num[0] for num in numbers if len(num)>0]
+        # breakpoint()
+        mi_num= min(numbers)
+        # if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
+        numbers = [(num - mi_num) for num in numbers] # celeb
         
         pred_arr = compute_features(files, model, batch_size,
                                                dims, device, num_workers)

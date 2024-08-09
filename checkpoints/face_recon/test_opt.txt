@@ -8,7 +8,7 @@
           checkpoints_dir: ./checkpoints                 
              dataset_mode: None                          
                  ddp_port: 12355                         
-                   device: cuda                          	[default: None]
+                   device: None                          
         display_per_batch: True                          
                     epoch: latest                        
           eval_batch_nums: inf                           
@@ -22,9 +22,7 @@
                      name: face_recon                    
                 net_recon: resnet50                      
               num_workers: None                          
-                     path: ['dataset/FaceData/CelebAMask-HQ/Val_target', 'results_grad/24_v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_src_features_ep7/results']	[default: ['/home/sanoojan/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results']]
                     phase: test                          
-                print_sim: False                         
                    suffix:                               
                   use_ddp: False                         	[default: True]
               use_last_fc: False                         

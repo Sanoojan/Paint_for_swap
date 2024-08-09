@@ -1,14 +1,14 @@
 
 # Set variables
-name="v5_Two_CLIP_proj_with_multiple_ID_losses_ep_17_3_75"
+name="v5_Two_CLIP_proj_154_last_ep_3_75"
 Results_dir="results_FFHQ_FINAL/${name}"
 Results_out="results_FFHQ_FINAL/${name}/results"
 Write_results="results_FFHQ_FINAL/quantitative/P4s/${name}"
-device=3
+device=2
 
 
-CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_with_multiple_ID_losses/PBE/celebA/2024-02-27T00-54-33_v5_Two_CLIP_proj_with_multiple_ID_losses/configs/2024-02-27T13-34-18-project.yaml"
-CKPT="models/Paint-by-Example/v5_Two_CLIP_proj_with_multiple_ID_losses/PBE/celebA/2024-02-27T00-54-33_v5_Two_CLIP_proj_with_multiple_ID_losses/checkpoints/last.ckpt"
+CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project_ffhq.yaml"
+CKPT="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt"
 
 source_path="dataset/FaceData/FFHQ/Val"
 target_path="dataset/FaceData/FFHQ/Val_target"
@@ -34,7 +34,7 @@ CUDA_VISIBLE_DEVICES=${device} python scripts/inference_test_bench.py \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
     --scale 3 \
-    --n_samples 12 \
+    --n_samples 10 \
     --device_ID ${device} \
     --dataset "FFHQ" \
     --ddim_steps 75 

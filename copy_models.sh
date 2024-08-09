@@ -12,5 +12,5 @@ declare -a names=(
 
 for name in "${names[@]}"
 do
-    scp -r sanoojan@10.127.30.114:/home/sanoojan/Paint_for_swap/${name} ${name}
+    scp -r sanoojan@10.127.30.114:/share/data/drive_3/Sanoojan/needed/Paint_for_swap/${name} ${name}
 done

@@ -5,13 +5,13 @@ Loading ResNet ArcFace
 Traceback (most recent call last):
   File "main_swap.py", line 513, in <module>
     # model
-  File "/home/sanoojan/Paint_for_swap/ldm/util.py", line 85, in instantiate_from_config
+  File "/share/data/drive_3/Sanoojan/needed/Paint_for_swap/ldm/util.py", line 85, in instantiate_from_config
     return get_obj_from_str(config["target"])(**config.get("params", dict()))
-  File "/home/sanoojan/Paint_for_swap/ldm/models/diffusion/ddpm.py", line 644, in __init__
+  File "/share/data/drive_3/Sanoojan/needed/Paint_for_swap/ldm/models/diffusion/ddpm.py", line 644, in __init__
     self.instantiate_IDLoss(cond_stage_config)
-  File "/home/sanoojan/Paint_for_swap/ldm/models/diffusion/ddpm.py", line 725, in instantiate_IDLoss
+  File "/share/data/drive_3/Sanoojan/needed/Paint_for_swap/ldm/models/diffusion/ddpm.py", line 725, in instantiate_IDLoss
     model = IDLoss(config,multiscale=self.multi_scale_ID)
-  File "/home/sanoojan/Paint_for_swap/ldm/models/diffusion/ddpm.py", line 89, in __init__
+  File "/share/data/drive_3/Sanoojan/needed/Paint_for_swap/ldm/models/diffusion/ddpm.py", line 89, in __init__
     self.facenet.load_state_dict(torch.load(opts.other_params.arcface_path))
   File "/share/softwares/anaconda/anaconda3/envs/paint2/lib/python3.8/site-packages/torch/serialization.py", line 713, in load
     return _legacy_load(opened_file, map_location, pickle_module, **pickle_load_args)

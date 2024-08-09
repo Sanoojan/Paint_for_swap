@@ -170,7 +170,7 @@ def main():
         "--src_image",
         type=str,
         help="src_image",
-        default="/home/sanoojan/Paint_for_swap/examples/faceswap/source.jpg"
+        default="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/examples/faceswap/source.jpg"
     )
     parser.add_argument(
         "--src_image_mask",
