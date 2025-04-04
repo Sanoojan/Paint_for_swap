@@ -1,6 +1,6 @@
 
 # Set variables
-name="v5_elon_to_news_ep_19"
+name="v5_old_man_video_test_inversion"
 Results_dir="results_video/${name}"
 Base_dir="results_video"
 Results_out="results_video/${name}/results"
@@ -8,37 +8,28 @@ Results_out="results_video/${name}/results"
 device=2
 
 
-CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_with_multiple_ID_losses/PBE/celebA/2024-02-27T00-54-33_v5_Two_CLIP_proj_with_multiple_ID_losses/configs/2024-02-27T00-54-33-project.yaml"
-CKPT="models/Paint-by-Example/v5_Two_CLIP_proj_with_multiple_ID_losses/PBE/celebA/2024-02-27T00-54-33_v5_Two_CLIP_proj_with_multiple_ID_losses/checkpoints/last.ckpt"
+CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project_ffhq.yaml"
+CKPT="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt"
 
-source_path="dataset/FaceData/CelebAMask-HQ/Val"
-source_mask_path="dataset/FaceData/CelebAMask-HQ/src_mask"
 
 
 current_time=$(date +"%Y%m%d_%H%M%S")
 output_filename="${Write_results}/out_${current_time}.txt"
 
-# if [ ! -d "$Write_results" ]; then
-#     mkdir -p "$Write_results"
-#     echo "Directory created: $Write_results"
-# else
-#     echo "Directory already exists: $Write_results"
-# fi
 
-# Run inference
 
 CUDA_VISIBLE_DEVICES=${device} python scripts/inference_swap_video.py \
     --outdir "${Results_dir}" \
-    --target_video "examples/faceswap/News_reading.mp4" \
+    --target_video "examples/Video/An Old Man Doing Exercises For The Body And Mind.mp4" \
     --config "${CONFIG}" \
     --ckpt "${CKPT}" \
-    --src_image "examples/faceswap/elon1.jpg" \
+    --src_image "examples/FaceSwap_10/Source/elon.jpeg" \
     --Base_dir "${Base_dir}" \
     --scale 3 \
-    --ddim_steps 75 
+    --ddim_steps 30 \
+    --Start_from_target 
 
 
-    # --Start_from_target \
     # --target_start_noise_t 1000  
     
 

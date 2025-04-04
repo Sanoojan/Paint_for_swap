@@ -1,4 +1,7 @@
 import argparse, os, sys, glob
+
+#set cuda device 
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import cv2
 import torch
 import numpy as np
@@ -16,7 +19,7 @@ from torch import autocast
 from contextlib import contextmanager, nullcontext
 import torchvision
 from ldm.util import instantiate_from_config
-from ldm.models.diffusion.ddim import DDIMSampler
+from ldm.models.diffusion.ddim_w_inv import DDIMSampler
 from ldm.models.diffusion.plms import PLMSSampler
 import albumentations as A
 import torchvision.transforms as transforms
@@ -34,7 +37,7 @@ from src.utils.alignmengt import crop_faces, calc_alignment_coefficients, crop_f
 from ldm.data.video_swap_dataset import VideoDataset
 # import clip
 from torchvision.transforms import Resize
-
+import torchvision.transforms.functional as TF 
 
 from PIL import Image
 from torchvision.transforms import PILToTensor
@@ -56,8 +59,7 @@ safety_model_id = "CompVis/stable-diffusion-safety-checker"
 safety_feature_extractor = AutoFeatureExtractor.from_pretrained(safety_model_id)
 safety_checker = StableDiffusionSafetyChecker.from_pretrained(safety_model_id)
 
-#set cuda device 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 def get_tensor(normalize=True, toTensor=True):
     transform_list = []
     if toTensor:
@@ -176,6 +178,34 @@ def check_safety(x_image):
             x_checked_image[i] = load_replacement(x_checked_image[i])
     return x_checked_image, has_nsfw_concept
 
+def un_norm_clip(x1):
+    x = x1*1.0 # to avoid changing the original tensor or clone() can be used
+    reduce=False
+    if len(x.shape)==3:
+        x = x.unsqueeze(0)
+        reduce=True
+    x[:,0,:,:] = x[:,0,:,:] * 0.26862954 + 0.48145466
+    x[:,1,:,:] = x[:,1,:,:] * 0.26130258 + 0.4578275
+    x[:,2,:,:] = x[:,2,:,:] * 0.27577711 + 0.40821073
+    
+    if reduce:
+        x = x.squeeze(0)
+    return x
+
+def un_norm(x):
+    return (x+1.0)/2.0
+
+
+
+def save_clip_img(img, path,clip=True):
+    if clip:
+        img=un_norm_clip(img)
+    else:
+        img=torch.clamp(un_norm(img), min=0.0, max=1.0)
+    img = img.cpu().numpy().transpose((1, 2, 0))
+    img = (img * 255).astype(np.uint8)
+    img = Image.fromarray(img)
+    img.save(path)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -192,14 +222,14 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video/debug"
+        default="results_video_new/debug"
     )
     parser.add_argument(
         "--Base_dir",
         type=str,
         nargs="?",
         help="dir to write cropped_images",
-        default="results_video"
+        default="results_video_new"
     )
     parser.add_argument(
         "--skip_grid",
@@ -237,6 +267,7 @@ def main():
         "--Start_from_target",
         action='store_true',
         help="if enabled, uses the noised target image as the starting ",
+        default=True
     )
     parser.add_argument(
         "--only_target_crop",
@@ -289,7 +320,13 @@ def main():
     parser.add_argument(
         "--n_samples",
         type=int,
-        default=10,
+        default=6,
+        help="how many samples to produce for each given prompt. A.k.a. batch size",
+    )
+    parser.add_argument(
+        "--n_frames",
+        type=int,
+        default=6,
         help="how many samples to produce for each given prompt. A.k.a. batch size",
     )
     parser.add_argument(
@@ -301,20 +338,20 @@ def main():
     parser.add_argument(
         "--scale",
         type=float,
-        default=5,
+        default=3.0,
         help="unconditional guidance scale: eps = eps(x, empty) + scale * (eps(x, cond) - eps(x, empty))",
     )
     parser.add_argument(
         "--target_video",
         type=str,
         help="target_video",
-        default="examples/faceswap/Andy2.mp4",
+        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+-1Jouc19Ixo+P0+C1+F4196-4320/vid.mp4",
     )
     parser.add_argument(
         "--src_image",
         type=str,
         help="src_image",
-        default="/share/data/drive_3/Sanoojan/needed/Paint_for_swap/examples/faceswap/source.jpg"
+        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/Celeb_Source/10.jpg"
     )
     parser.add_argument(
         "--src_image_mask",
@@ -329,13 +366,13 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/debug.yaml",
+        default="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project_ffhq.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="models/Paint-by-Example/ID_Landmark_CLIP_reconstruct_img_train/PBE/celebA/2023-10-07T21-09-06_v4_reconstruct_img_train/checkpoints/last.ckpt",
+        default="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(
@@ -438,9 +475,12 @@ def main():
     # video_shape
     video_shape = (int(video.get(cv2.CAP_PROP_FRAME_WIDTH)), int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)))
     temp_results_dir = os.path.join(outpath, 'temp_results')
+    inverse_results_dir=os.path.join(outpath, 'inverse_results')
     frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = video.get(cv2.CAP_PROP_FPS)
+    # fps = video.get(cv2.CAP_PROP_FPS)
+    fps=10
     os.makedirs(temp_results_dir, exist_ok=True)
+    os.makedirs(inverse_results_dir, exist_ok=True)
     
     faceParsing_model = init_faceParsing_pretrained_model(opt.faceParser_name, opt.faceParsing_ckpt, opt.segnext_config)
     
@@ -463,8 +503,12 @@ def main():
     base_count = len(os.listdir(target_frames_path))
     mask_count= len(os.listdir(mask_frames_path))
     
+    frame_count = opt.n_frames
+    
+    
     if base_count != frame_count or mask_count != frame_count :
         inv_transforms_all = []
+        
         for frame_index in tqdm(range(frame_count)):
             ret, frame = video.read() 
             # if frame_index <1088:
@@ -573,7 +617,9 @@ def main():
         start_code = start_code.unsqueeze(0).repeat(batch_size, 1, 1, 1)
 
    
-    use_prior=True
+    
+    use_prior=False
+    use_ddim_inversion=True
     
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
     sample=0
@@ -587,33 +633,13 @@ def main():
             with model.ema_scope():
                 all_samples = list()
   
+  
                 for test_batch,prior, test_model_kwargs,segment_id_batch in test_dataloader:
                     sample+=opt.n_samples
                     # if sample<980:
                     #     continue
-                    if opt.Start_from_target:
-                        print("Starting from target....")
-                        x=test_batch
-                        x=x.to(device)
-                        encoder_posterior = model.encode_first_stage(x)
-                        z = model.get_first_stage_encoding(encoder_posterior)
-                        t=int(opt.target_start_noise_t)
-                        # t = torch.ones((x.shape[0],), device=device).long()*t
-                        t = torch.randint(t-1, t, (x.shape[0],), device=device).long()
+                    # breakpoint()
                     
-                        if use_prior:
-                            prior=prior.to(device)
-                            encoder_posterior_2=model.encode_first_stage(prior)
-                            z2 = model.get_first_stage_encoding(encoder_posterior_2)
-                            noise = torch.randn_like(z2)
-                            x_noisy = model.q_sample(x_start=z2, t=t, noise=noise)
-                            start_code = x_noisy
-                            # print('start from target')
-                        else:
-                            noise = torch.randn_like(z)
-                            x_noisy = model.q_sample(x_start=z, t=t, noise=noise)
-                            start_code = x_noisy
-                        # print('start from target')
                         
                     test_model_kwargs={n:test_model_kwargs[n].to(device,non_blocking=True) for n in test_model_kwargs }
                     uc = None
@@ -649,9 +675,95 @@ def main():
                     test_model_kwargs['inpaint_mask']=Resize([z_inpaint.shape[-1],z_inpaint.shape[-1]])(test_model_kwargs['inpaint_mask'])
 
                     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+                    inverse_cond=None
+                    
+                    if opt.Start_from_target:
+                        print("Starting from target....")
+                        x=test_batch
+                        x=x.to(device)
+                        encoder_posterior = model.encode_first_stage(x)
+                        z = model.get_first_stage_encoding(encoder_posterior)
+                        
+                        
+                        t=int(opt.target_start_noise_t)
+                        # t = torch.ones((x.shape[0],), device=device).long()*t
+                        t = torch.randint(t-1, t, (x.shape[0],), device=device).long()
+                    
+                        if use_ddim_inversion:
+                            prior=prior.to(device)
+                            encoder_posterior_2=model.encode_first_stage(prior)
+                            z2 = model.get_first_stage_encoding(encoder_posterior_2)
+                            test_batch_clip=test_batch
+                            test_batch_clip=test_batch_clip.to(device)
+                            test_batch_clip=test_batch_clip*(1-inpaint_mask)
+                            test_batch_clip=un_norm(test_batch_clip)
+                            test_batch_clip=Resize([224,224])(test_batch_clip)
+                            test_batch_clip=TF.normalize(test_batch_clip, [0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711])
+                            
+                            # visualize ref_imgs
+                            
+                            
+                            
+                            
+                            
+                            inverse_cond=model.conditioning_with_feat(test_batch_clip.to(torch.float32),landmarks=landmarks,tar=test_batch.to("cuda").to(torch.float32)).float()
+                            
+                            inverse_steps=500
+                            x_noisy, intermediates = sampler.ddim_invert(x=z2,
+                                         cond=inverse_cond,
+                                         S=inverse_steps,
+                                         shape=shape,
+                                         eta=opt.ddim_eta,
+                                         unconditional_guidance_scale=opt.scale,
+                                         unconditional_conditioning=None,inverse_dir=inverse_results_dir,
+                                         test_model_kwargs=test_model_kwargs,
+                                         )
+                            
+                            
+                            # x_noisy=sampler.invert(S=opt.ddim_steps,
+                            #                             conditioning=c,
+                            #                             batch_size=test_batch.shape[0],
+                            #                             shape=shape,
+                            #                             verbose=False,
+                            #                             unconditional_guidance_scale=opt.scale,
+                            #                             unconditional_conditioning=uc,
+                            #                             eta=opt.ddim_eta,
+                            #                             x_T=z2,
+                            #                             test_model_kwargs=test_model_kwargs,src_im=ref_imgs.squeeze(1).to(torch.float32),tar=test_batch.to("cuda"))
+                            # start_code = x_noisy[0]
+                            # standardize start code
+                            # start_code = (start_code - start_code.mean()) / start_code.std()
+                            # start_code=x_noisy
+                            # start_code_noise=torch.randn_like(start_code)
+                            # alpha = 1.0  # Adjust this
+                            # start_code = alpha * start_code + (1 - alpha) * torch.randn_like(start_code)
+                            
+                            noise = torch.randn_like(z)
+                            
+                            # x_noisy = model.q_sample(x_start=z, t=t, noise=noise)
+                            # start_code = x_noisy
+                        
+                        elif use_prior:
+                            prior=prior.to(device)
+                            encoder_posterior_2=model.encode_first_stage(prior)
+                            z2 = model.get_first_stage_encoding(encoder_posterior_2)
+                            noise = torch.randn_like(z2)
+                            x_noisy = model.q_sample(x_start=z2, t=t, noise=noise)
+                            start_code = x_noisy
+                            # print('start from target')
+                        else:
+                            noise = torch.randn_like(z)
+                            x_noisy = model.q_sample(x_start=z, t=t, noise=noise)
+                            start_code = x_noisy
+                        # print('start from target')
+                    
+                    
+                    
                     # breakpoint()
                     samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
                                                         conditioning=c,
+                                                        target_conditioning=inverse_cond,
+                                                        inverse_results_dir=inverse_results_dir,
                                                         batch_size=test_batch.shape[0],
                                                         shape=shape,
                                                         verbose=False,
@@ -668,21 +780,7 @@ def main():
                     x_checked_image=x_samples_ddim
                     x_checked_image_torch = torch.from_numpy(x_checked_image).permute(0, 3, 1, 2)
 
-                    def un_norm(x):
-                        return (x+1.0)/2.0
-                    def un_norm_clip(x1):
-                        x = x1*1.0 # to avoid changing the original tensor or clone() can be used
-                        reduce=False
-                        if len(x.shape)==3:
-                            x = x.unsqueeze(0)
-                            reduce=True
-                        x[:,0,:,:] = x[:,0,:,:] * 0.26862954 + 0.48145466
-                        x[:,1,:,:] = x[:,1,:,:] * 0.26130258 + 0.4578275
-                        x[:,2,:,:] = x[:,2,:,:] * 0.27577711 + 0.40821073
-                        
-                        if reduce:
-                            x = x.squeeze(0)
-                        return x
+                    
 
                     if not opt.skip_save:
                         for i,x_sample in enumerate(x_checked_image_torch):
@@ -723,8 +821,6 @@ def main():
                             # save pasted image
                             pasted_image.save(os.path.join(result_path, segment_id_batch[i]+".png"))
                         
-                            
-                            
                             
                             
                             

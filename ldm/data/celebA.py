@@ -364,10 +364,12 @@ class CelebAdataset(data.Dataset):
             self.preserve=args['preserve_mask']
             self.remove_tar=args['preserve_mask']
             self.preserve_src=args['preserve_mask']
+            self.FSA=args['FSA']
         else:
             self.preserve=args['preserve_mask_src']
             self.remove_tar=args['remove_mask_tar']
             self.preserve_src=args['preserve_mask_src']
+            self.FSA=args['FSA']
         
         
         self.Fullmask=False
@@ -474,7 +476,9 @@ class CelebAdataset(data.Dataset):
         
         # a=random.randint(1,4)
         scale=random.uniform(0.5, 1.0)
-        mask_tensor_resize=decow(mask_tensor_resize.unsqueeze(0) ,scale=scale).squeeze(0)
+        if self.FSA:
+            mask_tensor_resize=decow(mask_tensor_resize.unsqueeze(0) ,scale=scale).squeeze(0)
+    
         inpaint_tensor_resize=image_tensor_resize*mask_tensor_resize
         
         mask_ref=1-T.Resize([1024,1024])(mask_tensor)

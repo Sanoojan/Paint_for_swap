@@ -140,6 +140,7 @@ class FrozenCLIPImageEmbedder(AbstractEncoder):
     def __init__(self, version="openai/clip-vit-large-patch14"):
         super().__init__()
         self.transformer = CLIPVisionModel.from_pretrained(version)
+        
         self.final_ln = LayerNorm(1024)
         self.mapper = Transformer(
                 1,
@@ -147,6 +148,7 @@ class FrozenCLIPImageEmbedder(AbstractEncoder):
                 5,
                 1,
             )
+        
 
         self.freeze()
 
@@ -158,12 +160,14 @@ class FrozenCLIPImageEmbedder(AbstractEncoder):
             param.requires_grad = True
         for param in self.final_ln.parameters():
             param.requires_grad = True
+        
 
     def forward(self, image):
         outputs = self.transformer(pixel_values=image)
         z = outputs.pooler_output
         z = z.unsqueeze(1)
         z = self.mapper(z)
+        
         z = self.final_ln(z)
         return z
 
