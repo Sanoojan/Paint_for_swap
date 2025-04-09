@@ -68,3 +68,9 @@ Eval_image_Folder/*
 configs/*
 results_video_new/*
 Debug/*
+output_video.mp4
+output_video2.mp4
+results_video_new_REFace/*
+Full_video_sweep_results/*
+Video_Quantitative/*
+Previous_results_all/*

@@ -260,7 +260,7 @@ class BasicTransformerBlock(nn.Module):
 
     def _forward(self, x, context=None):
         x = self.attn1(self.norm1(x),feature_transfer=self.feature_transfer) + x
-        x = self.attn2(self.norm2(x), context=context) + x
+        x = self.attn2(self.norm2(x), context=context,feature_transfer=False) + x
         x = self.ff(self.norm3(x)) + x
         return x
 

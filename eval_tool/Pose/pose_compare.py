@@ -64,7 +64,9 @@ parser.add_argument('path', type=str, nargs=2,
                     default=['/share/data/drive_3/Sanoojan/needed/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results'],
                     help=('Paths to the generated images or '
                           'to .npz statistic files'))
-
+parser.add_argument('--vidfolders', type=int,default=1000)
+parser.add_argument('--num_imgs', type=int,default=0)
+parser.add_argument('--subfolders', type=str,default=None)
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}
 
@@ -255,7 +257,7 @@ def calculate_activation_statistics(files, model, batch_size=50, dims=2048,
 
 
 def compute_features_wrapp(path, model, batch_size, dims, device,
-                               num_workers=1):
+                               num_workers=1,num_imgs=16):
     if path.endswith('.npz'):
         with np.load(path) as f:
             m, s = f['mu'][:], f['sigma'][:]
@@ -264,6 +266,7 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
         files = natsorted([file for ext in IMAGE_EXTENSIONS
                        for file in path.glob('*.{}'.format(ext))])
         
+        files = files[:num_imgs]
         # Extract all numbers before the dot using regular expression
         # breakpoint()
         pattern = r'[_\/.-]'
@@ -291,7 +294,7 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
     return pred_arr,numbers
 
 
-def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
+def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,num_imgs=16):
     """Calculates the FID of two paths"""
     for p in paths:
         if not os.path.exists(p):
@@ -310,9 +313,9 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1):
         hopenet.eval()
 
     feat1,ori_lab = compute_features_wrapp(paths[0], hopenet, batch_size,
-                                        dims, device, num_workers)
+                                        dims, device, num_workers,num_imgs=num_imgs)
     feat2,swap_lab = compute_features_wrapp(paths[1], hopenet, batch_size,
-                                        dims, device, num_workers)
+                                        dims, device, num_workers,num_imgs=num_imgs)
     
     # breakpoint()
     # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
@@ -338,13 +341,35 @@ def main():
         num_workers = min(num_avail_cpus, 8)
     else:
         num_workers = args.num_workers
+    
+    
+    vids=args.vidfolders 
+    num_imgs=args.num_imgs
+    
+    list_videos = natsorted(os.listdir(args.path[1]))
+    Pose_values= []
+    for i in range(vids):
+        target_path= os.path.join(args.path[0],list_videos[i])
+        
+        Results_path= os.path.join(args.path[1],list_videos[i])
+        if args.subfolders is not None:
+            Results_path= os.path.join(Results_path,args.subfolders)
+        
+        compute_paths= [target_path,Results_path]
 
-    Pose_value= calculate_id_given_paths(args.path,
-                                          args.batch_size,
-                                          device,
-                                          2048,
-                                          num_workers)
-    print('Pose_value: ',Pose_value)
+        Pose_value= calculate_id_given_paths(compute_paths,
+                                            args.batch_size,
+                                            device,
+                                            2048,
+                                            num_workers,num_imgs=num_imgs)
+        
+        Pose_values.append(Pose_value)
+        print('Pose_value for ',list_videos[i], ":", Pose_value)
+    
+    print('Pose_value', Pose_values)
+    
+    mean_pose = np.mean(Pose_values)    
+    print('Mean Pose value: ',mean_pose)
 
 
 if __name__ == '__main__':

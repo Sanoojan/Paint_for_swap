@@ -605,7 +605,7 @@ class UNetModel(nn.Module):
         if num_head_channels == -1:
             assert num_heads != -1, 'Either num_heads or num_head_channels has to be set'
         
-        self.feature_transfer=False
+        self.feature_transfer=True
         
         self.image_size = image_size
         self.in_channels = in_channels

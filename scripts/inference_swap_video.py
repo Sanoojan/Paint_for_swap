@@ -222,7 +222,7 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new/debug"
+        default="results_video_new_REFace/debug"
     )
     parser.add_argument(
         "--Base_dir",
@@ -326,7 +326,7 @@ def main():
     parser.add_argument(
         "--n_frames",
         type=int,
-        default=6,
+        default=36,
         help="how many samples to produce for each given prompt. A.k.a. batch size",
     )
     parser.add_argument(
@@ -345,13 +345,13 @@ def main():
         "--target_video",
         type=str,
         help="target_video",
-        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+-1Jouc19Ixo+P0+C1+F4196-4320/vid.mp4",
+        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+1qf8dZpLED0+P2+C1+F5731-5855/vid.mp4",
     )
     parser.add_argument(
         "--src_image",
         type=str,
         help="src_image",
-        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/Celeb_Source/10.jpg"
+        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/Celeb_Source/1.jpg"
     )
     parser.add_argument(
         "--src_image_mask",
@@ -710,7 +710,7 @@ def main():
                             
                             inverse_steps=500
                             x_noisy, intermediates = sampler.ddim_invert(x=z2,
-                                         cond=inverse_cond,
+                                         cond=inverse_cond,   # what happens if we use c
                                          S=inverse_steps,
                                          shape=shape,
                                          eta=opt.ddim_eta,
@@ -733,11 +733,11 @@ def main():
                             # start_code = x_noisy[0]
                             # standardize start code
                             # start_code = (start_code - start_code.mean()) / start_code.std()
-                            # start_code=x_noisy
+                            start_code=x_noisy
                             # start_code_noise=torch.randn_like(start_code)
-                            # alpha = 1.0  # Adjust this
+                            # alpha = 0.5  # Adjust this
                             # start_code = alpha * start_code + (1 - alpha) * torch.randn_like(start_code)
-                            
+                            # start_code=start_code/0.7
                             noise = torch.randn_like(z)
                             
                             # x_noisy = model.q_sample(x_start=z, t=t, noise=noise)
