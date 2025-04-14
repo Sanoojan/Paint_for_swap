@@ -15,6 +15,21 @@ import numpy as np
 import logging
 logger = logging.getLogger(__name__)
 
+
+from ldm.modules.attention import exists, default, default_dict
+from einops import rearrange, repeat
+from torch import nn, einsum
+
+
+# PNP injection functions
+# Modified from ResnetBlock2D.forward
+# Modified from models/resnet.py
+# from diffusers.utils import USE_PEFT_BACKEND
+# from diffusers.models.upsampling import Upsample2D
+# from diffusers.models.downsampling import Downsample2D
+
+
+
 # Modified from tokenflow_utils.py
 def register_time(model, t):
     conv_module = model.unet.up_blocks[1].resnets[1]
@@ -28,13 +43,75 @@ def register_time(model, t):
             setattr(module, "t", t)
 
 
-# PNP injection functions
-# Modified from ResnetBlock2D.forward
-# Modified from models/resnet.py
-# from diffusers.utils import USE_PEFT_BACKEND
-# from diffusers.models.upsampling import Upsample2D
-# from diffusers.models.downsampling import Downsample2D
 
+
+def register_spa_attn_injection(model, injection_schedule):
+    
+    def spa_attn_forward(self):
+        
+        def forward( x, context=None, mask=None,feature_transfer=True):
+        
+            if feature_transfer:
+                batch_size=x.shape[0]
+                if batch_size<13:
+                    feature_transfer=False  # justt for debugging later code properly
+                    
+                chunk_size=batch_size//3
+            
+            
+            h = self.heads
+
+            q = self.to_q(x)        # 2,4096,320
+            context = default(context, x) #2,4096,320
+            if context.shape[-1]==768*2:
+                # this is for different attention heads
+                context1,context2=torch.chunk(context,2,dim=-1) # clip/id context1, landmark context2
+                k1=self.to_k(context1)
+                k2=self.to_k(context2)
+                v1=self.to_v(context1)
+                v2=self.to_v(context2)
+                
+                k=torch.cat([k1[:,:,:self.head_splits[0]*self.dim_head],k2[:,:,-self.head_splits[1]*self.dim_head:]],dim=-1)
+                v=torch.cat([v1[:,:,:self.head_splits[0]*self.dim_head],v2[:,:,-self.head_splits[1]*self.dim_head:]],dim=-1)
+                # head_splits=[6,2]
+                # k1 = self.to_k[0](context1)
+                # v1 = self.to_v[0](context1)
+                # k2 = self.to_k[1](context2)
+                # v2 = self.to_v[1](context2)
+                # k=torch.cat([k1,k2],dim=-1)
+                # v=torch.cat([v1,v2],dim=-1)
+                
+            else:
+                k = self.to_k(context)
+                v = self.to_v(context)
+            if feature_transfer:
+                print('pnp feature transfering')
+                q[:chunk_size]=q[2*chunk_size:]
+                k[:chunk_size]=k[2*chunk_size:]
+                
+                q[chunk_size:2*chunk_size]=q[2*chunk_size:]
+                k[chunk_size:2*chunk_size]=k[2*chunk_size:]
+            q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
+
+
+            sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
+
+            if exists(mask):
+                mask = rearrange(mask, 'b ... -> b (...)')
+                max_neg_value = -torch.finfo(sim.dtype).max
+                mask = repeat(mask, 'b j -> (b h) () j', h=h)
+                sim.masked_fill_(~mask, max_neg_value)
+
+            # attention, what we cannot get enough of
+            attn = sim.softmax(dim=-1)
+
+            out = einsum('b i j, b j d -> b i d', attn, v)
+            out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
+            return self.to_out(out)
+        return forward
+    spa_module = model.unet.up_blocks[1].attentions[1].transformer_blocks[0].attn1
+    spa_module.forward = spa_attn_forward(spa_module)
+    setattr(spa_module, "injection_schedule", injection_schedule)
 
 def register_conv_injection(model, injection_schedule):
     

@@ -182,7 +182,7 @@ class CrossAttention(nn.Module):
         
         if feature_transfer:
             batch_size=x.shape[0]
-            if batch_size<11:
+            if batch_size<13:
                 feature_transfer=False  # justt for debugging later code properly
                 
             chunk_size=batch_size//3

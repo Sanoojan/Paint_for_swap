@@ -309,7 +309,7 @@ class DDIMSampler(object):
     @torch.no_grad()
     def ddim_invert(self, x, cond, S, shape, eta=0., 
                     unconditional_guidance_scale=1., 
-                    unconditional_conditioning=None,inverse_dir=None, **kwargs):
+                    unconditional_conditioning=None,inverse_dir=None,batch_size=6, **kwargs):
         """
         Perform DDIM inversion to estimate the noise that led to the given image `x`.
 
@@ -398,11 +398,16 @@ class DDIMSampler(object):
             
             x = nosie  # Update x to continue inversion
             
+            # save_noise= ((nosie[:batch_size]+nosie[batch_size:])/1.41)
             
+            if i<len(timesteps)//2:
+                save_noise= nosie[:batch_size]
+            else:
+                save_noise= nosie[batch_size:]
             
             # save noise
             torch.save(
-                nosie.detach().clone(),
+                save_noise.detach().clone(),
                 os.path.join(inverse_dir, f"ddim_latents_{step}.pt"),
             )
             

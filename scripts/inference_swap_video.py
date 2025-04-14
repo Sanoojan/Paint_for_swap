@@ -222,14 +222,14 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new_REFace/debug"
+        default="results_video_new_REFace/elon/debug_avg__tar_lat_at_early20_src_at_at_lat_20"
     )
     parser.add_argument(
         "--Base_dir",
         type=str,
         nargs="?",
         help="dir to write cropped_images",
-        default="results_video_new"
+        default="results_video_new_REFace"
     )
     parser.add_argument(
         "--skip_grid",
@@ -326,7 +326,7 @@ def main():
     parser.add_argument(
         "--n_frames",
         type=int,
-        default=36,
+        default=6,
         help="how many samples to produce for each given prompt. A.k.a. batch size",
     )
     parser.add_argument(
@@ -351,7 +351,7 @@ def main():
         "--src_image",
         type=str,
         help="src_image",
-        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/Celeb_Source/1.jpg"
+        default="examples/FaceSwap_10/Source/elon.jpeg"
     )
     parser.add_argument(
         "--src_image_mask",
@@ -373,6 +373,7 @@ def main():
         "--ckpt",
         type=str,
         default="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt",
+        # default="models/Paint-by-Example/No_FSA_CIAI/checkpoints/epoch=000015.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(
@@ -550,6 +551,9 @@ def main():
     trans=A.Compose([
             A.Resize(height=224,width=224)])
     ref_img_path = src_image_new
+    
+    
+    
     img_p_np=cv2.imread(ref_img_path)
     # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
     ref_img = cv2.cvtColor(img_p_np, cv2.COLOR_BGR2RGB)
@@ -579,6 +583,16 @@ def main():
     ref_img=get_tensor_clip()(ref_img)
     ref_img=ref_img*mask_ref
     ref_image_tensor = ref_img.to(device,non_blocking=True).to(torch.float16).unsqueeze(0)
+    
+    ######## Src Reconstruction ###########
+    ref_img_inv_ori=Image.open(ref_img_path).convert("RGB").resize((512,512), Image.BILINEAR)
+    ref_img_inv_ori = get_tensor()(ref_img_inv_ori)
+    ref_img_inv_ori= ref_img_inv_ori*reference_mask_tensor
+    
+    ref_img_inv_ori_inpaint=ref_img_inv_ori.clone()
+    ref_img_inv_ori_inpaint=ref_img_inv_ori_inpaint*(1-reference_mask_tensor)
+    #######################################
+    
     
     #Black_mask
     # ref_mask_img=Image.fromarray(ref_img).convert('L')
@@ -655,6 +669,14 @@ def main():
                     # stack it ref_imgs to the shape of test_batch
                     ref_imgs=ref_imgs.repeat(test_batch.shape[0],1,1,1)
                     
+                    ##############  Src Reconstruction ##########
+                    ref_img_inv=ref_img_inv_ori
+                    landmarks_src=model.get_landmarks(ref_img_inv.unsqueeze(0)) 
+                    cond_w_src=model.conditioning_with_feat(ref_imgs[0].unsqueeze(0).to(torch.float32),landmarks=landmarks_src,tar=ref_img_inv.unsqueeze(0).to("cuda").to(torch.float32)).float()
+                    cond_w_src=cond_w_src.repeat(test_batch.shape[0],1,1)
+                    ############################
+                    
+                    
                     c=model.conditioning_with_feat(ref_imgs.squeeze(1).to(torch.float32),landmarks=landmarks,tar=test_batch.to("cuda").to(torch.float32)).float()
                     if (model.land_mark_id_seperate_layers or model.sep_head_att) and opt.scale != 1.0:
             
@@ -674,6 +696,17 @@ def main():
                     test_model_kwargs['inpaint_image']=z_inpaint
                     test_model_kwargs['inpaint_mask']=Resize([z_inpaint.shape[-1],z_inpaint.shape[-1]])(test_model_kwargs['inpaint_mask'])
 
+                    ######## Src Reconstruction ###########
+                    inpaint_mask_src=1-reference_mask_tensor
+                    inpaint_image_src=ref_img_inv_ori_inpaint
+                    inpaint_image_src=inpaint_image_src.unsqueeze(0).to(device)
+                    z_inpaint_src = model.encode_first_stage(inpaint_image_src)
+                    z_inpaint_src = model.get_first_stage_encoding(z_inpaint_src).detach()
+                    inpaint_image_src=z_inpaint_src
+                    inpaint_mask_src=Resize([z_inpaint_src.shape[-1],z_inpaint_src.shape[-1]])(inpaint_mask_src)
+                    #######################################
+                    
+                    
                     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                     inverse_cond=None
                     
@@ -701,25 +734,48 @@ def main():
                             test_batch_clip=TF.normalize(test_batch_clip, [0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711])
                             
                             # visualize ref_imgs
-                            
-                            
-                            
-                            
-                            
+
                             inverse_cond=model.conditioning_with_feat(test_batch_clip.to(torch.float32),landmarks=landmarks,tar=test_batch.to("cuda").to(torch.float32)).float()
                             
-                            inverse_steps=500
+                            inverse_steps=50
+                            
+                            prior=prior.to(device)
+                            encoder_posterior_2=model.encode_first_stage(prior)
+                            z2 = model.get_first_stage_encoding(encoder_posterior_2)
+                            
+                            ######## Src Reconstruction ###########
+                            ref_img_inv=ref_img_inv.repeat(test_batch.shape[0],1,1,1)
+                            ref_img_inv=ref_img_inv.to(device)
+                            encoder_posterior_ref=model.encode_first_stage(ref_img_inv)
+                            z_ref = model.get_first_stage_encoding(encoder_posterior_ref)
+                            z2=torch.cat([z2,z_ref],dim=0)
+                            inverse_cond_inv=torch.cat([inverse_cond,cond_w_src],dim=0)
+                            test_model_kwargs_inv=test_model_kwargs.copy()
+                            
+                            
+                            # test_model_kwargs_inv['inpaint_image']=torch.cat([test_model_kwargs['inpaint_image'],test_model_kwargs['inpaint_image']],dim=0)  # just checking
+                            # test_model_kwargs_inv['inpaint_mask']=torch.cat([test_model_kwargs['inpaint_mask'],test_model_kwargs['inpaint_mask']],dim=0)  # just checking
+                            
+                            inpaint_image_src=inpaint_image_src.repeat(test_batch.shape[0],1,1,1)
+                            inpaint_mask_src=inpaint_mask_src.repeat(test_batch.shape[0],1,1,1).to(device)
+                            test_model_kwargs_inv['inpaint_image']=torch.cat([test_model_kwargs['inpaint_image'],inpaint_image_src ],dim=0)  # just checking
+                            test_model_kwargs_inv['inpaint_mask']=torch.cat([test_model_kwargs['inpaint_mask'],inpaint_mask_src],dim=0) 
+                            
+                            ####################
+                            
+                            
                             x_noisy, intermediates = sampler.ddim_invert(x=z2,
-                                         cond=inverse_cond,   # what happens if we use c
+                                         cond=inverse_cond_inv,   # what happens if we use c
                                          S=inverse_steps,
                                          shape=shape,
                                          eta=opt.ddim_eta,
                                          unconditional_guidance_scale=opt.scale,
                                          unconditional_conditioning=None,inverse_dir=inverse_results_dir,
-                                         test_model_kwargs=test_model_kwargs,
+                                         batch_size=test_batch.shape[0],
+                                         test_model_kwargs=test_model_kwargs_inv
                                          )
                             
-                            
+                            x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
                             # x_noisy=sampler.invert(S=opt.ddim_steps,
                             #                             conditioning=c,
                             #                             batch_size=test_batch.shape[0],
@@ -733,7 +789,18 @@ def main():
                             # start_code = x_noisy[0]
                             # standardize start code
                             # start_code = (start_code - start_code.mean()) / start_code.std()
-                            start_code=x_noisy
+                            
+                            # check this hyper parameter
+                            start_code=(x_noisy_target+x_noisy_src)/1.41
+                            # start_code=x_noisy_src
+                  
+                            
+                            # Optional
+                            inp_mask=test_model_kwargs['inpaint_mask']
+                            inp_mask=inp_mask.repeat(1, 4, 1, 1)
+                            start_code[inp_mask==1.0]=x_noisy_target[inp_mask==1.0]
+                            
+                            # start_code=x_noisy_target
                             # start_code_noise=torch.randn_like(start_code)
                             # alpha = 0.5  # Adjust this
                             # start_code = alpha * start_code + (1 - alpha) * torch.randn_like(start_code)
