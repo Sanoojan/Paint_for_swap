@@ -74,3 +74,9 @@ results_video_new_REFace/*
 Full_video_sweep_results/*
 Video_Quantitative/*
 Previous_results_all/*
+Unwanted/*
+last.ckpt
+Other_dependencies/face_parsing/79999_iter.pth
+Other_dependencies/face_recon/epoch_latest.pth
+Other_dependencies/Hopenet_pose/hopenet_robust_alpha1.pkl
+outputs/*

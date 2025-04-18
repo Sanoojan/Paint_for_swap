@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-from ldm.modules.attention import exists, default, default_dict
+from ldm.modules.attention import exists, default
 from einops import rearrange, repeat
 from torch import nn, einsum
 
@@ -29,6 +29,14 @@ from torch import nn, einsum
 # from diffusers.models.downsampling import Downsample2D
 
 
+def find_all_modules_by_name(model,mod_name):
+    modules = []
+    mod_names=[]
+    for name, module in model.named_modules():
+        if name.endswith(mod_name):
+            modules.append((module))
+            mod_names.append(name)
+    return modules,mod_names
 
 # Modified from tokenflow_utils.py
 def register_time(model, t):
@@ -45,7 +53,7 @@ def register_time(model, t):
 
 
 
-def register_spa_attn_injection(model, injection_schedule):
+def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_blocks=False,output_blocks=True,middle_block=False,attn_component='attn1',chunks=3):
     
     def spa_attn_forward(self):
         
@@ -53,10 +61,10 @@ def register_spa_attn_injection(model, injection_schedule):
         
             if feature_transfer:
                 batch_size=x.shape[0]
-                if batch_size<13:
+                if switch_on==False:
                     feature_transfer=False  # justt for debugging later code properly
                     
-                chunk_size=batch_size//3
+                chunk_size=batch_size//chunks
             
             
             h = self.heads
@@ -85,12 +93,20 @@ def register_spa_attn_injection(model, injection_schedule):
                 k = self.to_k(context)
                 v = self.to_v(context)
             if feature_transfer:
-                print('pnp feature transfering')
-                q[:chunk_size]=q[2*chunk_size:]
-                k[:chunk_size]=k[2*chunk_size:]
                 
-                q[chunk_size:2*chunk_size]=q[2*chunk_size:]
-                k[chunk_size:2*chunk_size]=k[2*chunk_size:]
+                if chunks==3:
+                    print('pnp feature transfering')
+                    q[:chunk_size]=q[2*chunk_size:]
+                    k[:chunk_size]=k[2*chunk_size:]
+                    
+                    q[chunk_size:2*chunk_size]=q[2*chunk_size:]
+                    k[chunk_size:2*chunk_size]=k[2*chunk_size:]
+                elif chunks==2:
+                    print('pnp feature transfering at inv tar to src')
+                    q[chunk_size:]=q[:chunk_size]
+                    k[chunk_size:]=k[:chunk_size]
+                    
+                    
             q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 
 
@@ -109,9 +125,33 @@ def register_spa_attn_injection(model, injection_schedule):
             out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
             return self.to_out(out)
         return forward
-    spa_module = model.unet.up_blocks[1].attentions[1].transformer_blocks[0].attn1
-    spa_module.forward = spa_attn_forward(spa_module)
-    setattr(spa_module, "injection_schedule", injection_schedule)
+    if input_blocks:
+        spa_attn_modules,module_names = find_all_modules_by_name(model.model.model.diffusion_model.input_blocks,attn_component) 
+        for i,module in enumerate(spa_attn_modules):
+            module.forward = spa_attn_forward(module)
+            # module.processor.injection_schedule = injection_schedule
+            # print(module.processor.injection_schedule)
+            
+            setattr(module, "injection_schedule", injection_schedule)
+        print(module_names, "are registered with injection and switched on:",switch_on)
+    if output_blocks:
+        spa_attn_modules,module_names = find_all_modules_by_name(model.model.model.diffusion_model.output_blocks,attn_component) 
+        for i,module in enumerate(spa_attn_modules):
+            module.forward = spa_attn_forward(module)
+            # module.processor.injection_schedule = injection_schedule
+            # print(module.processor.injection_schedule)
+            print(module_names[i], "is registered with injection")
+            setattr(module, "injection_schedule", injection_schedule)
+        print(module_names, "are registered with injection and switched on:",switch_on)
+    if middle_block:
+        spa_attn_modules,module_names = find_all_modules_by_name(model.model.model.diffusion_model.middle_block,attn_component) 
+        for i,module in enumerate(spa_attn_modules):
+            module.forward = spa_attn_forward(module)
+            # module.processor.injection_schedule = injection_schedule
+            # print(module.processor.injection_schedule)
+            print(module_names[i], "is registered with injection")
+            setattr(module, "injection_schedule", injection_schedule)
+        print(module_names, "are registered with injection and switched on:",switch_on)
 
 def register_conv_injection(model, injection_schedule):
     
@@ -138,7 +178,7 @@ def register_conv_injection(model, injection_schedule):
                 h = self.out_layers(h)
                 
             # if self.injection_schedule is not None and (self.t in self.injection_schedule or self.t == 1000):
-            if False:
+            if True:
                 # logger.debug(f"PnP Injecting Conv at t={self.t}")
                 print(f"PnP Injecting Conv")
                 

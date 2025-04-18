@@ -12,7 +12,7 @@ from ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters, mak
     extract_into_tensor
     
 from PIL import Image
-from ldm.models.pnp_utils import register_time,register_conv_injection
+from ldm.models.pnp_utils import *
 
 
 def load_ddim_latents_at_t(t, ddim_latents_path):
@@ -204,8 +204,6 @@ class DDIMSampler(object):
         print(f'Data shape for DDIM sampling is {size}, eta {eta}')
         
         
-        register_conv_injection(self, 1)
-        
         
         samples, intermediates = self.ddim_sampling(conditioning,     
                                                     size,
@@ -260,7 +258,23 @@ class DDIMSampler(object):
         iterator = tqdm(time_range, desc='DDIM Sampler', total=total_steps)
         if src_im is not None:
             src_im=un_norm_clip(src_im)
+
+        # TODO: properly code injection schedule
+        # pnp injection
+        # switch off pnp injection
+        register_spa_attn_injection(self, 1,switch_on=False,input_blocks=True,middle_block=True, output_blocks=True,attn_component="attn1", chunks=3)
+        #pnp feature transfer    
+        
+        # register_conv_injection(self, 1) 
+        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3)
+        
+        
         for i, step in enumerate(iterator):
+            
+            # if i==total_steps//2:
+                # register_spa_attn_injection(self, 1,switch_on=False,input_blocks=False,output_blocks=True,attn_component="attn1")
+                # register_spa_attn_injection(self, 1,switch_on=True,input_blocks=True,output_blocks=False,attn_component="attn1")
+            
             index = total_steps - i - 1
             ts = torch.full((b,), step, device=device, dtype=torch.long)
 
@@ -335,7 +349,14 @@ class DDIMSampler(object):
 
         intermediates = {'x_inter': [x]}
         
+        register_spa_attn_injection(self, 1,switch_on=False,input_blocks=True,middle_block=True, output_blocks=True,attn_component="attn1", chunks=3)
+        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=2)
+        
         for i, step in enumerate(tqdm(timesteps, desc="DDIM Inversion", total=len(timesteps))):
+            
+            # if i>len(timesteps)//2:
+            #     register_spa_attn_injection(self, 1,switch_on=False,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=2)
+                
             
             inversion_save_path="Debug/inversions4"
             debug=False
@@ -403,7 +424,7 @@ class DDIMSampler(object):
             if i<len(timesteps)//2:
                 save_noise= nosie[:batch_size]
             else:
-                save_noise= nosie[batch_size:]
+                save_noise= nosie[:batch_size]  # change back to nosie[batch_size:] if needed
             
             # save noise
             torch.save(

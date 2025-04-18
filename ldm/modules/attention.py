@@ -176,18 +176,7 @@ class CrossAttention(nn.Module):
             nn.Dropout(dropout)
         )
 
-    def forward(self, x, context=None, mask=None,feature_transfer=False):
-        
-        
-        
-        if feature_transfer:
-            batch_size=x.shape[0]
-            if batch_size<13:
-                feature_transfer=False  # justt for debugging later code properly
-                
-            chunk_size=batch_size//3
-        
-        
+    def forward(self, x, context=None, mask=None):
         h = self.heads
 
         q = self.to_q(x)        # 2,4096,320
@@ -213,16 +202,8 @@ class CrossAttention(nn.Module):
         else:
             k = self.to_k(context)
             v = self.to_v(context)
-        if feature_transfer:
-            print('pnp feature transfering')
-            q[:chunk_size]=q[2*chunk_size:]
-            k[:chunk_size]=k[2*chunk_size:]
-            
-            q[chunk_size:2*chunk_size]=q[2*chunk_size:]
-            k[chunk_size:2*chunk_size]=k[2*chunk_size:]
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 
-        
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 
         sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
 
@@ -241,7 +222,7 @@ class CrossAttention(nn.Module):
 
 
 class BasicTransformerBlock(nn.Module):
-    def __init__(self, dim, n_heads, d_head, dropout=0., context_dim=None, gated_ff=True, checkpoint=True,sep_head_att=False,feature_transfer=False):
+    def __init__(self, dim, n_heads, d_head, dropout=0., context_dim=None, gated_ff=True, checkpoint=True,sep_head_att=False):
         super().__init__()
         self.attn1 = CrossAttention(query_dim=dim, heads=n_heads, dim_head=d_head, dropout=dropout,sep_head_att=False)  # is a self-attention
         self.ff = FeedForward(dim, dropout=dropout, glu=gated_ff)
@@ -251,16 +232,13 @@ class BasicTransformerBlock(nn.Module):
         self.norm2 = nn.LayerNorm(dim)
         self.norm3 = nn.LayerNorm(dim)
         self.checkpoint = checkpoint
-        
-        
-        self.feature_transfer=feature_transfer
 
     def forward(self, x, context=None):
         return checkpoint(self._forward, (x, context), self.parameters(), self.checkpoint)
 
     def _forward(self, x, context=None):
-        x = self.attn1(self.norm1(x),feature_transfer=self.feature_transfer) + x
-        x = self.attn2(self.norm2(x), context=context,feature_transfer=False) + x
+        x = self.attn1(self.norm1(x)) + x
+        x = self.attn2(self.norm2(x), context=context) + x
         x = self.ff(self.norm3(x)) + x
         return x
 
@@ -274,7 +252,7 @@ class SpatialTransformer(nn.Module):
     Finally, reshape to image
     """
     def __init__(self, in_channels, n_heads, d_head,
-                 depth=1, dropout=0., context_dim=None,sep_head_att=False,head_splits=None,feature_transfer=False):
+                 depth=1, dropout=0., context_dim=None,sep_head_att=False,head_splits=None):
         super().__init__()
         self.in_channels = in_channels
         inner_dim = n_heads * d_head
@@ -287,7 +265,7 @@ class SpatialTransformer(nn.Module):
                                  padding=0)
 
         self.transformer_blocks = nn.ModuleList(
-            [BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim,sep_head_att=sep_head_att,feature_transfer=feature_transfer)
+            [BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim,sep_head_att=sep_head_att)
                 for d in range(depth)]
         )
 

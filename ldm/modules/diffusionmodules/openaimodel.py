@@ -604,9 +604,7 @@ class UNetModel(nn.Module):
 
         if num_head_channels == -1:
             assert num_heads != -1, 'Either num_heads or num_head_channels has to be set'
-        
-        self.feature_transfer=True
-        
+
         self.image_size = image_size
         self.in_channels = in_channels
         self.model_channels = model_channels
@@ -808,7 +806,7 @@ class UNetModel(nn.Module):
                             num_head_channels=dim_head,
                             use_new_attention_order=use_new_attention_order,
                         ) if not use_spatial_transformer else SpatialTransformer(
-                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim,sep_head_att=sep_head_att,head_splits=head_splits,feature_transfer=self.feature_transfer
+                            ch, num_heads, dim_head, depth=transformer_depth, context_dim=context_dim,sep_head_att=sep_head_att,head_splits=head_splits
                         )
                     )
                 if level and i == num_res_blocks:
@@ -896,17 +894,10 @@ class UNetModel(nn.Module):
             h = module(h, emb, context2)
             hs.append(h)
         h = self.middle_block(h, emb, context1) # ([4, 1280, 8, 8])
-        
-        # Do feature transfering
-     
-        
         for module in self.output_blocks:
             h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb, context1)
             features.append(h)
-        
- 
-        
         h = h.type(x.dtype)
         if self.predict_codebook_ids:
             return self.id_predictor(h)
@@ -1132,4 +1123,3 @@ class EncoderUNetModel(nn.Module):
         else:
             h = h.type(x.dtype)
             return self.out(h)
-
