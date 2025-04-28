@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 from ldm.modules.attention import exists, default
 from einops import rearrange, repeat
 from torch import nn, einsum
+from scripts.face_swap_utils import *
 
 
 # PNP injection functions
@@ -53,7 +54,7 @@ def register_time(model, t):
 
 
 
-def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_blocks=False,output_blocks=True,middle_block=False,attn_component='attn1',chunks=3):
+def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_blocks=False,output_blocks=True,middle_block=False,attn_component='attn1',chunks=3,block_indices=None, fusion="replace"):
     
     def spa_attn_forward(self):
         
@@ -71,40 +72,65 @@ def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_b
 
             q = self.to_q(x)        # 2,4096,320
             context = default(context, x) #2,4096,320
-            if context.shape[-1]==768*2:
-                # this is for different attention heads
-                context1,context2=torch.chunk(context,2,dim=-1) # clip/id context1, landmark context2
-                k1=self.to_k(context1)
-                k2=self.to_k(context2)
-                v1=self.to_v(context1)
-                v2=self.to_v(context2)
+            # if context.shape[-1]==768*2:
+            #     # this is for different attention heads
+            #     context1,context2=torch.chunk(context,2,dim=-1) # clip/id context1, landmark context2
+            #     k1=self.to_k(context1)
+            #     k2=self.to_k(context2)
+            #     v1=self.to_v(context1)
+            #     v2=self.to_v(context2)
                 
-                k=torch.cat([k1[:,:,:self.head_splits[0]*self.dim_head],k2[:,:,-self.head_splits[1]*self.dim_head:]],dim=-1)
-                v=torch.cat([v1[:,:,:self.head_splits[0]*self.dim_head],v2[:,:,-self.head_splits[1]*self.dim_head:]],dim=-1)
-                # head_splits=[6,2]
-                # k1 = self.to_k[0](context1)
-                # v1 = self.to_v[0](context1)
-                # k2 = self.to_k[1](context2)
-                # v2 = self.to_v[1](context2)
-                # k=torch.cat([k1,k2],dim=-1)
-                # v=torch.cat([v1,v2],dim=-1)
+            #     k=torch.cat([k1[:,:,:self.head_splits[0]*self.dim_head],k2[:,:,-self.head_splits[1]*self.dim_head:]],dim=-1)
+            #     v=torch.cat([v1[:,:,:self.head_splits[0]*self.dim_head],v2[:,:,-self.head_splits[1]*self.dim_head:]],dim=-1)
+            #     # head_splits=[6,2]
+            #     # k1 = self.to_k[0](context1)
+            #     # v1 = self.to_v[0](context1)
+            #     # k2 = self.to_k[1](context2)
+            #     # v2 = self.to_v[1](context2)
+            #     # k=torch.cat([k1,k2],dim=-1)
+            #     # v=torch.cat([v1,v2],dim=-1)
                 
-            else:
-                k = self.to_k(context)
-                v = self.to_v(context)
+            # else:
+            k = self.to_k(context)
+            v = self.to_v(context)
             if feature_transfer:
                 
                 if chunks==3:
-                    print('pnp feature transfering')
-                    q[:chunk_size]=q[2*chunk_size:]
-                    k[:chunk_size]=k[2*chunk_size:]
                     
-                    q[chunk_size:2*chunk_size]=q[2*chunk_size:]
-                    k[chunk_size:2*chunk_size]=k[2*chunk_size:]
+                    if fusion=="replace":
+                        
+                        q[chunk_size:2*chunk_size]=q[:chunk_size]
+                        k[chunk_size:2*chunk_size]=k[:chunk_size]
+                        
+                        q[2*chunk_size:]=q[:chunk_size]
+                        k[2*chunk_size:]=k[:chunk_size]
+                        print('pnp feature transfering')
+                    elif fusion=="adaIn":
+                        q[chunk_size:2*chunk_size]=AdaIn_fusion_for_attn(q[:chunk_size],q[chunk_size:2*chunk_size],alpha=0.9)  
+                        k[chunk_size:2*chunk_size]=AdaIn_fusion_for_attn(k[:chunk_size],k[chunk_size:2*chunk_size],alpha=0.9)
+                        
+                        q[2*chunk_size:]=AdaIn_fusion_for_attn(q[:chunk_size],q[2*chunk_size:],alpha=0.9)
+                        k[2*chunk_size:]=AdaIn_fusion_for_attn(k[:chunk_size],k[2*chunk_size:],alpha=0.9)
+                    elif fusion=="mix":
+                        q[chunk_size:2*chunk_size]=mix_source_and_target(q[:chunk_size],q[chunk_size:2*chunk_size],alpha=0.5)
+                        k[chunk_size:2*chunk_size]=mix_source_and_target(k[:chunk_size],k[chunk_size:2*chunk_size],alpha=0.5)
+                        
+                        q[2*chunk_size:]=mix_source_and_target(q[:chunk_size],q[2*chunk_size:],alpha=0.5)
+                        k[2*chunk_size:]=mix_source_and_target(k[:chunk_size],k[2*chunk_size:],alpha=0.5)
+                        
+                        # print('pnp feature transfering')
+                    
+                    
+                    
+                    
                 elif chunks==2:
                     print('pnp feature transfering at inv tar to src')
                     q[chunk_size:]=q[:chunk_size]
                     k[chunk_size:]=k[:chunk_size]
+                    
+                    # print('pnp feature transfering at src to tar')
+                    # q[:chunk_size]=q[chunk_size:]
+                    # k[:chunk_size]=k[chunk_size:]
                     
                     
             q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
@@ -127,31 +153,55 @@ def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_b
         return forward
     if input_blocks:
         spa_attn_modules,module_names = find_all_modules_by_name(model.model.model.diffusion_model.input_blocks,attn_component) 
+        processed_modules = []
         for i,module in enumerate(spa_attn_modules):
-            module.forward = spa_attn_forward(module)
-            # module.processor.injection_schedule = injection_schedule
-            # print(module.processor.injection_schedule)
+            if block_indices is None:
+                module.forward = spa_attn_forward(module)
+                processed_modules.append(module_names[i])
+                continue
+            elif i in block_indices:
+                module.forward = spa_attn_forward(module)
+                processed_modules.append(module_names[i])
+                continue
+                # module.processor.injection_schedule = injection_schedule
+                # print(module.processor.injection_schedule)
             
             setattr(module, "injection_schedule", injection_schedule)
-        print(module_names, "are registered with injection and switched on:",switch_on)
+        print(processed_modules, "are registered with injection and switched on:",switch_on)
     if output_blocks:
         spa_attn_modules,module_names = find_all_modules_by_name(model.model.model.diffusion_model.output_blocks,attn_component) 
+        processed_modules = []
         for i,module in enumerate(spa_attn_modules):
-            module.forward = spa_attn_forward(module)
-            # module.processor.injection_schedule = injection_schedule
-            # print(module.processor.injection_schedule)
-            print(module_names[i], "is registered with injection")
+            if block_indices is None:
+                module.forward = spa_attn_forward(module)
+                processed_modules.append(module_names[i])
+                continue
+            elif i in block_indices:
+                module.forward = spa_attn_forward(module)
+                processed_modules.append(module_names[i])
+                continue
+                # module.processor.injection_schedule = injection_schedule
+                # print(module.processor.injection_schedule)
+            
             setattr(module, "injection_schedule", injection_schedule)
-        print(module_names, "are registered with injection and switched on:",switch_on)
+        print(processed_modules, "are registered with injection and switched on:",switch_on)
     if middle_block:
         spa_attn_modules,module_names = find_all_modules_by_name(model.model.model.diffusion_model.middle_block,attn_component) 
+        processed_modules = []
         for i,module in enumerate(spa_attn_modules):
-            module.forward = spa_attn_forward(module)
-            # module.processor.injection_schedule = injection_schedule
-            # print(module.processor.injection_schedule)
-            print(module_names[i], "is registered with injection")
+            if block_indices is None:
+                module.forward = spa_attn_forward(module)
+                processed_modules.append(module_names[i])
+                continue
+            elif i in block_indices:
+                module.forward = spa_attn_forward(module)
+                processed_modules.append(module_names[i])
+                continue
+                # module.processor.injection_schedule = injection_schedule
+                # print(module.processor.injection_schedule)
+            
             setattr(module, "injection_schedule", injection_schedule)
-        print(module_names, "are registered with injection and switched on:",switch_on)
+        print(processed_modules, "are registered with injection and switched on:",switch_on)
 
 def register_conv_injection(model, injection_schedule):
     

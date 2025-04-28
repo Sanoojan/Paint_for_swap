@@ -1,7 +1,7 @@
 import argparse, os, sys, glob
 
 #set cuda device 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import cv2
 import torch
 import numpy as np
@@ -50,6 +50,8 @@ from pretrained.face_parsing.face_parsing_demo import init_faceParsing_pretraine
 
 # import matplotlib.pyplot as plt
 import torch.nn as nn
+
+from scripts.face_swap_utils import *
 
 # cos = nn.CosineSimilarity(dim=0)
 import numpy as np  
@@ -222,7 +224,7 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new_REFace/elon/debug_Just_test_runs"
+        default="results_video_new_REFace/Injection_analysis/no_fsa_154/Elon/Different_combination_of_noise_fixed_0_6_tar_ft_transfer/Debug"
     )
     parser.add_argument(
         "--Base_dir",
@@ -351,6 +353,7 @@ def main():
         "--src_image",
         type=str,
         help="src_image",
+        # default="examples/FaceSwap_10/Source/will_smith.jpeg"
         default="examples/FaceSwap_10/Source/elon.jpeg"
     )
     parser.add_argument(
@@ -373,6 +376,8 @@ def main():
         "--ckpt",
         type=str,
         default="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt",
+        # default="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt",
+        # default="models/Paint-by-Example/No_FSA_CIAI/checkpoints/epoch=000019.ckpt",
         # default="models/Paint-by-Example/No_FSA_CIAI/checkpoints/epoch=000015.ckpt",
         help="path to checkpoint of model",
     )
@@ -776,39 +781,24 @@ def main():
                                          )
                             
                             x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
-                            # x_noisy=sampler.invert(S=opt.ddim_steps,
-                            #                             conditioning=c,
-                            #                             batch_size=test_batch.shape[0],
-                            #                             shape=shape,
-                            #                             verbose=False,
-                            #                             unconditional_guidance_scale=opt.scale,
-                            #                             unconditional_conditioning=uc,
-                            #                             eta=opt.ddim_eta,
-                            #                             x_T=z2,
-                            #                             test_model_kwargs=test_model_kwargs,src_im=ref_imgs.squeeze(1).to(torch.float32),tar=test_batch.to("cuda"))
-                            # start_code = x_noisy[0]
-                            # standardize start code
-                            # start_code = (start_code - start_code.mean()) / start_code.std()
                             
-                            # check this hyper parameter
-                            # start_code=(x_noisy_target+x_noisy_src)/1.41
-                            start_code=x_noisy_src
-                  
+                            # fft fusion
+                            # start_code=fft_fusion(x_noisy_target,x_noisy_src,center=16)
                             
-                            # Optional
-                            # inp_mask=test_model_kwargs['inpaint_mask']
-                            # inp_mask=inp_mask.repeat(1, 4, 1, 1)
-                            # start_code[inp_mask==1.0]=x_noisy_target[inp_mask==1.0]
+                            
                             
                             # start_code=x_noisy_target
-                            # start_code_noise=torch.randn_like(start_code)
-                            # alpha = 0.5  # Adjust this
-                            # start_code = alpha * start_code + (1 - alpha) * torch.randn_like(start_code)
-                            # start_code=start_code/0.7
-                            noise = torch.randn_like(z)
+                            # start_code=x_noisy_src
                             
-                            # x_noisy = model.q_sample(x_start=z, t=t, noise=noise)
-                            # start_code = x_noisy
+                            #lpf fusion
+                            # start_code=lpf_fusion(x_noisy_target,x_noisy_src)
+                            
+                            #adain fusion
+                            start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=0.4,normalized=True)
+                            
+                            # start_code=(x_noisy_target+x_noisy_src)/1.41
+                            
+                           
                         
                         elif use_prior:
                             prior=prior.to(device)

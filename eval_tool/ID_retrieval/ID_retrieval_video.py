@@ -77,6 +77,7 @@ parser.add_argument('--arcface', type=bool, default=False)
 parser.add_argument('--target_label_path', type=str)
 parser.add_argument('--results_subfolder', type=str)
 parser.add_argument('--target_subfolder', type=str)
+parser.add_argument('--number_of_images', type=int, default=None)
 
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}
@@ -199,9 +200,7 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-        mask_path = self.maskfiles[i]
-        ref_mask_img = Image.open(mask_path).convert('L')
-        ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
+       
 
         if self.data_name=="celeba":
             preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ]
@@ -210,27 +209,35 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         elif self.data_name=="ff++":
             preserve = [1,2,4,5,8,9 ]
         else:
-            preserve=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]  # No mask
+            preserve=None # No mask
         # preserve = [1,2,4,5,8,9 ,6,7,10,11,12 ] # CelebA-HQ
         # preserve = [1,2,3,5,6,7,9]  # FFHQ or FF++
         # print("preserve:",preserve)
         # preserve = [1,2,4,5,8,9 ]
-        ref_mask= np.isin(ref_mask_img, preserve)
+        if preserve is not None:
+            mask_path = self.maskfiles[i]
+            ref_mask_img = Image.open(mask_path).convert('L')
+            ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
+            ref_mask= np.isin(ref_mask_img, preserve)
 
-        # Create a converted_mask where preserved values are set to 255
-        ref_converted_mask = np.zeros_like(ref_mask_img)
-        ref_converted_mask[ref_mask] = 255
-        ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
-        # convert to PIL image
-        
-        reference_mask_tensor=get_tensor(normalize=False, toTensor=True)(ref_converted_mask)
-        mask_ref=TF.Resize((112,112))(reference_mask_tensor)
-        ref_img=self.trans(image=image)
-        ref_img=Image.fromarray(ref_img["image"])
-        ref_img=get_tensor()(ref_img)
-        ref_img=ref_img*mask_ref
-        image = ref_img.unsqueeze(0)
-        
+            # Create a converted_mask where preserved values are set to 255
+            ref_converted_mask = np.zeros_like(ref_mask_img)
+            ref_converted_mask[ref_mask] = 255
+            ref_converted_mask=Image.fromarray(ref_converted_mask).convert('L')
+            # convert to PIL image
+            
+            reference_mask_tensor=get_tensor(normalize=False, toTensor=True)(ref_converted_mask)
+            mask_ref=TF.Resize((112,112))(reference_mask_tensor)
+            ref_img=self.trans(image=image)
+            ref_img=Image.fromarray(ref_img["image"])
+            ref_img=get_tensor()(ref_img)
+            ref_img=ref_img*mask_ref
+            image = ref_img.unsqueeze(0)
+        else:
+            ref_img=self.trans(image=image)
+            ref_img=Image.fromarray(ref_img["image"])
+            ref_img=get_tensor()(ref_img)
+            image = ref_img.unsqueeze(0)
         
         
         # ref_mask_img_r = ref_converted_mask.resize(image.shape[1::-1], Image.NEAREST)
@@ -254,7 +261,7 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
 
 
 def compute_features(files,mask_files, model,other_model, batch_size=50, dims=2048, device='cpu',
-                    num_workers=1,data_name="celeba"):
+                    num_workers=1,data_name="celeba",number_of_images=None):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
     -- files       : List of image files paths
@@ -278,8 +285,10 @@ def compute_features(files,mask_files, model,other_model, batch_size=50, dims=20
         print(('Warning: batch size is bigger than the data size. '
                'Setting batch size to data size'))
         batch_size = len(files)
-
-    dataset = MaskedImagePathDataset(files,maskfiles=mask_files, transforms=TF.ToTensor(),data_name=data_name)
+    # breakpoint()
+    
+    
+    dataset = MaskedImagePathDataset(files,maskfiles= mask_files, transforms=TF.ToTensor(),data_name=data_name)
     
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
@@ -312,7 +321,7 @@ def compute_features(files,mask_files, model,other_model, batch_size=50, dims=20
 
 
 def compute_features_wrapp(path,mask_path, IDLoss_model,Other_model, batch_size, dims, device,
-                               num_workers=1,data_name="celeba", lables_file=None):
+                               num_workers=1,data_name="celeba", lables_file=None,args=None, number_of_images=None):
     if path.endswith('.npz'):
         with np.load(path) as f:
             m, s = f['mu'][:], f['sigma'][:]
@@ -326,6 +335,11 @@ def compute_features_wrapp(path,mask_path, IDLoss_model,Other_model, batch_size,
         mask_files = natsorted([file for ext in IMAGE_EXTENSIONS
                        for file in mask_path.glob('*.{}'.format(ext))])
         
+        if number_of_images is not None:
+            files = files[:number_of_images]
+            mask_files = mask_files[:number_of_images]
+        
+        # breakpoint()
         if lables_file is None:
             # Extract all numbers before the dot using regular expression
             # breakpoint()
@@ -349,7 +363,11 @@ def compute_features_wrapp(path,mask_path, IDLoss_model,Other_model, batch_size,
         else:
             numbers = []
             # Extract the clip name from the path (the folder before model_outputs)
-            clip_name = os.path.basename(os.path.dirname(path))
+            
+            if args.results_subfolder is None:
+                clip_name = os.path.basename(path)
+            else:
+                clip_name = os.path.basename(os.path.dirname(path))
             # Read the labels from the file
             with open(lables_file, 'r') as f:
                 lines = f.readlines()
@@ -362,8 +380,9 @@ def compute_features_wrapp(path,mask_path, IDLoss_model,Other_model, batch_size,
                             numbers.append(int(number_str))
                             break
         # print(f'Numbers: {numbers}')
+        
         pred_arr = compute_features(files,mask_files, IDLoss_model,Other_model, batch_size,
-                                               dims, device, num_workers,data_name=data_name)
+                                               dims, device, num_workers,data_name=data_name,number_of_images=args.number_of_images)
 
     return pred_arr,numbers
 
@@ -375,8 +394,8 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
     # get all subfolders in paths[1] and paths[3]
     subfolders1 = [os.path.basename(f.path) for f in os.scandir(paths[1]) if f.is_dir()]
     subfolders2 = [os.path.basename(f.path) for f in os.scandir(paths[3]) if f.is_dir()]
-
-    assert len(subfolders1) == len(subfolders2), 'Number of subfolders in paths[1] and paths[3] must be equal'
+    # breakpoint()
+    # assert len(subfolders1) == len(subfolders2), 'Number of subfolders in paths[1] and paths[3] must be equal'
 
     mean_simirities = []
     std_simirities = []
@@ -386,9 +405,18 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
 
     if args.arcface:
         IDLoss_model=IDLoss().cuda()
-        
-    for subdirectory in subfolders1:
+    
+    video_names = []    
+    with open(args.target_label_path, 'r') as f:
+        lines = f.readlines()
         # breakpoint()
+        for line in lines:
+            vid = line.strip().split(': ')[0]
+            video_names.append(vid)
+                
+    
+    for subdirectory in video_names:
+        
 
         paths = pathsdup.copy()
         if args.results_subfolder is None:
@@ -400,19 +428,18 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
         else:
             paths[3] = os.path.join(paths[3], subdirectory, args.target_subfolder)
 
-
+        # breakpoint()
         for p in paths:
             if not os.path.exists(p):
                 raise RuntimeError('Invalid path: %s' % p)
 
         
-        
     
         try:
             feat1,ori_lab = compute_features_wrapp(paths[0],paths[2], IDLoss_model,None, batch_size,
-                                                dims, device, num_workers,data_name=data_name)
+                                                dims, device, num_workers,data_name=data_name,args=args)
             feat2,swap_lab = compute_features_wrapp(paths[1],paths[3], IDLoss_model,None, batch_size,
-                                                dims, device, num_workers,data_name=data_name, lables_file=args.target_label_path)
+                                                dims, device, num_workers,data_name=data_name, lables_file=args.target_label_path,args=args,number_of_images=args.number_of_images)
         except Exception as e:
             print(f"Error processing {subdirectory}: {e}")
             continue
@@ -424,13 +451,11 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
         pred= np.argmax(dot_prod,axis=1)
         # find accuracy of top 1 and top 5
         top1 = np.sum(np.argmax(dot_prod,axis=1)==swap_lab)/len(swap_lab)
-        
         top5_predictions = np.argsort(dot_prod, axis=1)[:, -5:]  # Get indices of top-5 predictions
         top5_correct = np.sum(np.any(top5_predictions == np.array(swap_lab)[:, np.newaxis], axis=1))
         top5 = top5_correct / len(swap_lab)  # Top-5 accuracy
-        # breakpoint()
         # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
-        # breakpoint()
+    
         feat_sel=feat1[swap_lab]
         feat_sel=feat_sel/np.linalg.norm(feat_sel,axis=1,keepdims=True)
         feat2=feat2/np.linalg.norm(feat2,axis=1,keepdims=True)

@@ -80,3 +80,4 @@ Other_dependencies/face_parsing/79999_iter.pth
 Other_dependencies/face_recon/epoch_latest.pth
 Other_dependencies/Hopenet_pose/hopenet_robust_alpha1.pkl
 outputs/*
+input_source_images/*

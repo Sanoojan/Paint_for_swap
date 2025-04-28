@@ -35,6 +35,7 @@ from pretrained.face_parsing.face_parsing_demo import init_faceParsing_pretraine
 import torch.nn as nn 
 import yaml
 from glob import glob
+from scripts.face_swap_utils import *
 
 # load safety model
 safety_model_id = "CompVis/stable-diffusion-safety-checker"
@@ -278,9 +279,10 @@ def run_inference(model, sampler, opt, device, config):
             if ret:
                 try:
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame_old = frame
                     Image.fromarray(frame).save(os.path.join(target_frames_path, f'{frame_index}.png'))
                     crops, orig_images, quads, inv_transforms = crop_and_align_face([os.path.join(target_frames_path, f'{frame_index}.png')])
-                    frame_old = frame
+                    
                     crops = [crop.convert("RGB") for crop in crops]
                     T = crops[0]
                     inv_transforms_all.append(inv_transforms[0])
@@ -538,39 +540,8 @@ def run_inference(model, sampler, opt, device, config):
                                 start_code=x_noisy.to(x.device)
                             
                             x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
-                            # x_noisy=sampler.invert(S=opt.ddim_steps,
-                            #                             conditioning=c,
-                            #                             batch_size=test_batch.shape[0],
-                            #                             shape=shape,
-                            #                             verbose=False,
-                            #                             unconditional_guidance_scale=opt.scale,
-                            #                             unconditional_conditioning=uc,
-                            #                             eta=opt.ddim_eta,
-                            #                             x_T=z2,
-                            #                             test_model_kwargs=test_model_kwargs,src_im=ref_imgs.squeeze(1).to(torch.float32),tar=test_batch.to("cuda"))
-                            # start_code = x_noisy[0]
-                            # standardize start code
-                            # start_code = (start_code - start_code.mean()) / start_code.std()
                             
-                            # check this hyper parameter
-                            start_code=(x_noisy_target+x_noisy_src)/1.41
-                            # start_code=x_noisy_src
-                  
-                            
-                            # Optional
-                            # inp_mask=test_model_kwargs['inpaint_mask']
-                            # inp_mask=inp_mask.repeat(1, 4, 1, 1)
-                            # start_code[inp_mask==1.0]=x_noisy_target[inp_mask==1.0]
-                            
-                            # start_code=x_noisy_target
-                            # start_code_noise=torch.randn_like(start_code)
-                            # alpha = 0.5  # Adjust this
-                            # start_code = alpha * start_code + (1 - alpha) * torch.randn_like(start_code)
-                            # start_code=start_code/0.7
-                            noise = torch.randn_like(z)
-                            
-                            # x_noisy = model.q_sample(x_start=z, t=t, noise=noise)
-                            # start_code = x_noisy
+                            start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=1.0,beta=0.8,normalized=True)
                         
                         elif use_prior:
                             prior=prior.to(device)
@@ -583,7 +554,8 @@ def run_inference(model, sampler, opt, device, config):
                         else:
                             noise = torch.randn_like(z)
                             x_noisy = model.q_sample(x_start=z, t=t, noise=noise)
-                            start_code = x_noisy
+                            if start_code is not None:
+                                start_code = x_noisy
 
                     samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
                                                         conditioning=c,
@@ -596,7 +568,9 @@ def run_inference(model, sampler, opt, device, config):
                                                         unconditional_conditioning=uc,
                                                         eta=opt.ddim_eta,
                                                         x_T=start_code,
-                                                        test_model_kwargs=test_model_kwargs,src_im=ref_imgs.squeeze(1).to(torch.float32),tar=test_batch.to("cuda"))
+                                                        test_model_kwargs=test_model_kwargs,
+                                                        src_im=ref_imgs.squeeze(1).to(torch.float32),
+                                                        tar=test_batch.to("cuda"))
 
                     x_samples_ddim = model.decode_first_stage(samples_ddim)
                     x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
@@ -776,7 +750,7 @@ def main():
     parser.add_argument(
         "--n_frames",
         type=int,
-        default=36,
+        default=24,
         help="how many samples to produce for each given prompt. A.k.a. batch size",
     )
     parser.add_argument(

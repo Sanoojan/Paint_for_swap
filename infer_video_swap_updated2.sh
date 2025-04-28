@@ -2,12 +2,12 @@
 ##### EXPERIMENTAL #####
 
 Base_dir="outputs/VFHQ_test_full"
-Experiment_name="13_PnP_with_feature_injection_0_6_adaIn_0_3_w_tar_avg_start_154_model"
-device=1
+Experiment_name="13_PnP_with_feature_injection_0_6_adaIn_0_8_start"
+device=2
 
 CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project_ffhq.yaml"
 DATA_CONFIG="dataset/FaceData/Data/VFHQ-Test/data_matching.yaml"
-CKPT="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt"
+CKPT="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt"
 
 video_base_dir="/home/sanoojan/Paint_for_swap/dataset/FaceData/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4"
 image_dir="/home/sanoojan/Paint_for_swap/dataset/FaceData/Data/VFHQ-Test/Celeb_Source"
