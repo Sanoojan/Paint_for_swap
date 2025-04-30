@@ -15,24 +15,55 @@ def mix_source_and_target(target,source, alpha=0.5):
     
     return (1 - alpha) * source + alpha * target
 
-def fft_fusion(noise_A, noise_B, center=16):
+# def fft_fusion(noise_A, noise_B, center=16,center_exclude=3):
+#     # Apply FFT over H and W for each batch and channel
+#     fft_A = torch.fft.fft2(noise_A, dim=(-2, -1))
+#     fft_B = torch.fft.fft2(noise_B, dim=(-2, -1))
+    
+#     fft_A_shift = torch.fft.fftshift(fft_A, dim=(-2, -1))
+#     fft_B_shift = torch.fft.fftshift(fft_B, dim=(-2, -1))
+#     # breakpoint()
+    
+#     B, C, H, W = noise_A.shape
+#     mask = torch.zeros((H, W), device=noise_A.device)
+#     cx, cy = H // 2, W // 2
+#     mask[cx - center:cx + center, cy - center:cy + center] = 1
+#     mask[cx - center_exclude:cx + center_exclude, cy - center_exclude:cy + center_exclude] = 0
+#     mask = mask[None, None, :, :]  # shape: (1, 1, H, W)
+    
+#     combined_fft = fft_A_shift * (1-mask) + fft_B_shift * (mask)
+#     # combined_fft=fft_B_shift
+#     combined_fft = torch.fft.ifftshift(combined_fft, dim=(-2, -1))
+    
+    
+#     combined = torch.fft.ifft2(combined_fft, dim=(-2, -1)).real
+#     return combined
+
+def fft_fusion(noise_A, noise_B, center=16, center_exclude=3):
     # Apply FFT over H and W for each batch and channel
     fft_A = torch.fft.fft2(noise_A, dim=(-2, -1))
     fft_B = torch.fft.fft2(noise_B, dim=(-2, -1))
-    
+
     fft_A_shift = torch.fft.fftshift(fft_A, dim=(-2, -1))
     fft_B_shift = torch.fft.fftshift(fft_B, dim=(-2, -1))
-    
+
     B, C, H, W = noise_A.shape
-    mask = torch.zeros((H, W), device=noise_A.device)
     cx, cy = H // 2, W // 2
-    mask[cx - center:cx + center, cy - center:cy + center] = 1
+
+    # Create a circular mask instead of a square one
+    Y, X = torch.meshgrid(torch.arange(H, device=noise_A.device), 
+                          torch.arange(W, device=noise_A.device), indexing='ij')
+    dist = torch.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
+    mask = ((dist <= center) & (dist > center_exclude)).float()
     mask = mask[None, None, :, :]  # shape: (1, 1, H, W)
-    
-    combined_fft = fft_A_shift * mask + fft_B_shift * (1 - mask)
+
+    # Blend FFTs using the circular mask
+    combined_fft = fft_A_shift * (1 - mask) + fft_B_shift * mask
+
+    # Inverse FFT to return to the spatial domain
     combined_fft = torch.fft.ifftshift(combined_fft, dim=(-2, -1))
-    
     combined = torch.fft.ifft2(combined_fft, dim=(-2, -1)).real
+
     return combined
 
 
@@ -147,19 +178,7 @@ def AdaIn_fusion_for_attn(noise_A, noise_B, alpha=0.71,normalized=True):
         # Standardize the fused noise
         return alpha*fused_noise
 
-def plot_fft_3d(fft, title=None):
-    import matplotlib.pyplot as plt
-    import numpy as np
 
-    # Convert to numpy for plotting
-    fft_np = fft.cpu().numpy()
-    
-    # Plot the magnitude spectrum
-    plt.figure(figsize=(10, 10))
-    plt.imshow(np.abs(fft_np[0, 0]), cmap='gray')
-    plt.title(title)
-    plt.colorbar()
-    plt.show()
 
  
 def plot_fft_3d(latent_tensor, batch_idx=0, channel_idx=0, log_scale=True,save_path="out.png"):

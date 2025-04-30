@@ -13,13 +13,15 @@ from ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters, mak
     
 from PIL import Image
 from ldm.models.pnp_utils import *
-
+from scripts.face_swap_utils import *
 
 def load_ddim_latents_at_t(t, ddim_latents_path):
     ddim_latents_at_t_path = os.path.join(ddim_latents_path, f"ddim_latents_{t}.pt")
     assert os.path.exists(ddim_latents_at_t_path), f"Missing latents at t {t} path {ddim_latents_at_t_path}"
     ddim_latents_at_t = torch.load(ddim_latents_at_t_path)
     return ddim_latents_at_t
+
+
 
 def un_norm_clip(x1):
     x = x1*1.0 # to avoid changing the original tensor or clone() can be used
@@ -47,6 +49,22 @@ def save_clip_img(img, path,clip=True):
     img = (img * 255).astype(np.uint8)
     img = Image.fromarray(img)
     img.save(path)
+    
+def save_latent_img(model,latents, path,ind=0):
+    img=model.decode_first_stage(latents)
+    img = torch.clamp((img + 1.0) / 2.0, min=0.0, max=1.0)
+    img = img.cpu().permute(0, 2, 3, 1).numpy()
+    img=img[ind]
+    img = (img * 255).astype(np.uint8)
+    img = Image.fromarray(img)
+    img.save(path)
+    
+def analyse_fft(tar,src,model):
+    for i in range(1,64):
+        for j in range(i):
+            
+            save_noise=fft_fusion(tar,src,center=i,center_exclude=j)
+            save_latent_img(model,save_noise,path=f"Debug/fft_analysis/comb_{i}_{j}.jpg",ind=4)
 
 class IDLoss(nn.Module):
     def __init__(self,path="Other_dependencies/arcface/model_ir_se50.pth",multiscale=False):
@@ -266,7 +284,7 @@ class DDIMSampler(object):
         #pnp feature transfer    
         
         # register_conv_injection(self, 1) 
-        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,6],fusion="replace")
+        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,6,7,8],fusion="replace")
         
         
         for i, step in enumerate(iterator):
@@ -420,11 +438,21 @@ class DDIMSampler(object):
             x = nosie  # Update x to continue inversion
             
             # save_noise= ((nosie[:batch_size]+nosie[batch_size:])/1.41)
-            
+            x_noisy_target= nosie[:batch_size]
+            x_noisy_src= nosie[batch_size:]
             if i<len(timesteps)//2:
-                save_noise= nosie[:batch_size]
+                # save_noise=fft_fusion(x_noisy_target,x_noisy_src,center=17,center_exclude=0)
+                # save_noise= AdaIn_fusion(nosie[:batch_size],nosie[batch_size:],alpha=1.0,beta=0.8,normalized=True)
+                save_noise=x_noisy_target
+                # save_noise=x_noisy_src
             else:
-                save_noise= nosie[:batch_size]  # change back to nosie[batch_size:] if needed
+                
+                # save_noise= AdaIn_fusion(nosie[:batch_size],nosie[batch_size:],alpha=1.0,beta=0.8,normalized=True)
+                # save_noise=fft_fusion(x_noisy_target,x_noisy_src,center=17,center_exclude=0)
+                save_noise=x_noisy_target
+                # save_noise=x_noisy_src
+                
+            
             
             # save noise
             torch.save(

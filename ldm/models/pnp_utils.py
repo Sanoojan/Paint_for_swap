@@ -104,7 +104,7 @@ def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_b
                         
                         q[2*chunk_size:]=q[:chunk_size]
                         k[2*chunk_size:]=k[:chunk_size]
-                        print('pnp feature transfering')
+                        print('pnp feature transfering by replace')
                     elif fusion=="adaIn":
                         q[chunk_size:2*chunk_size]=AdaIn_fusion_for_attn(q[:chunk_size],q[chunk_size:2*chunk_size],alpha=0.9)  
                         k[chunk_size:2*chunk_size]=AdaIn_fusion_for_attn(k[:chunk_size],k[chunk_size:2*chunk_size],alpha=0.9)

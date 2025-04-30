@@ -1,7 +1,7 @@
 import argparse, os, sys, glob
 
 #set cuda device 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 import cv2
 import torch
 import numpy as np
@@ -224,14 +224,14 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new_REFace/Injection_analysis/no_fsa_154/Elon/Different_combination_of_noise_fixed_0_6_tar_ft_transfer/Debug"
+        default="results_video_new_REFace_analysis/Injection_analysis/Elon/Different_combination_of_noise_fixed_0_6_tar_ft_transfer/fft_debug"
     )
     parser.add_argument(
         "--Base_dir",
         type=str,
         nargs="?",
         help="dir to write cropped_images",
-        default="results_video_new_REFace"
+        default="results_video_new_REFace_analysis"
     )
     parser.add_argument(
         "--skip_grid",
@@ -347,7 +347,7 @@ def main():
         "--target_video",
         type=str,
         help="target_video",
-        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+1qf8dZpLED0+P2+C1+F5731-5855/vid.mp4",
+        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+-1Jouc19Ixo+P0+C1+F4196-4320/vid.mp4",
     )
     parser.add_argument(
         "--src_image",
@@ -783,18 +783,18 @@ def main():
                             x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
                             
                             # fft fusion
-                            # start_code=fft_fusion(x_noisy_target,x_noisy_src,center=16)
+                            # start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
                             
                             
                             
-                            # start_code=x_noisy_target
+                            start_code=x_noisy_target
                             # start_code=x_noisy_src
                             
                             #lpf fusion
                             # start_code=lpf_fusion(x_noisy_target,x_noisy_src)
                             
                             #adain fusion
-                            start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=0.4,normalized=True)
+                            # start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=1.0,beta=0.8,normalized=True)
                             
                             # start_code=(x_noisy_target+x_noisy_src)/1.41
                             

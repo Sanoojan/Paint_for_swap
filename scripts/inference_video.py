@@ -541,8 +541,10 @@ def run_inference(model, sampler, opt, device, config):
                             
                             x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
                             
-                            start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=1.0,beta=0.8,normalized=True)
-                        
+                            # start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=1.0,beta=0.8,normalized=True)
+                            start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
+                            
+                            
                         elif use_prior:
                             prior=prior.to(device)
                             encoder_posterior_2=model.encode_first_stage(prior)
