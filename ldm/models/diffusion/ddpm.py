@@ -708,6 +708,12 @@ class LatentDiffusion(DDPM):
             self.Landmark_cond=False
             self.Landmarks_weight=0
             self.Landmark_loss_weight=0
+            self.stack_feat=False
+            self.concat_feat=False
+            self.use_3dmm=False
+            self.Source_CLIP_feat=False
+            self.Target_CLIP_feat=False
+            
         if self.stack_feat:
             stacks=int(self.clip_weight>0)+int(self.ID_weight>0)+int(self.Landmarks_weight>0)
             self.learnable_vector = nn.Parameter(torch.randn((1,1,768)), requires_grad=True)
@@ -965,14 +971,7 @@ class LatentDiffusion(DDPM):
                 c[:, :80]=c_source[:, :80]
                 c=self.dmm_proj_out(c)
                 c=c.unsqueeze(1)
-        #         facemodel.split_coeff(output_coeff)
-        #         id_coeffs = coeffs[:, :80]
-        # exp_coeffs = coeffs[:, 80: 144]
-        # tex_coeffs = coeffs[:, 144: 224]
-        # angles = coeffs[:, 224: 227]
-        # gammas = coeffs[:, 227: 254]
-        # translations = coeffs[:, 254:]
-                
+
                 
                 # c_src = self.proj_out(c_src)
             

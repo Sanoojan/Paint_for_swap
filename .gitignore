@@ -85,3 +85,5 @@ input_source_images/*
 !add eval_tool/common_metrics_on_video_quality/*  
 
 results_video_new_REFace_analysis/*
+All_results/*
+
