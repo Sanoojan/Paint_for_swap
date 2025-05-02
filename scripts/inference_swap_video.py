@@ -224,7 +224,7 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new_REFace_analysis/Injection_analysis/Elon/Different_combination_of_noise_fixed_0_6_tar_ft_transfer/fft_debug"
+        default="results_video_new_REFace_analysis/Temporal_analysis/fft_3_1_start"
     )
     parser.add_argument(
         "--Base_dir",
@@ -347,14 +347,14 @@ def main():
         "--target_video",
         type=str,
         help="target_video",
-        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+-1Jouc19Ixo+P0+C1+F4196-4320/vid.mp4",
+        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+1qf8dZpLED0+P2+C1+F5731-5855/vid.mp4",
     )
     parser.add_argument(
         "--src_image",
         type=str,
         help="src_image",
-        # default="examples/FaceSwap_10/Source/will_smith.jpeg"
-        default="examples/FaceSwap_10/Source/elon.jpeg"
+        default="examples/FaceSwap_10/Source/will_smith.jpeg"
+        # default="examples/FaceSwap_10/Source/elon.jpeg"
     )
     parser.add_argument(
         "--src_image_mask",
@@ -375,8 +375,8 @@ def main():
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt",
-        # default="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt",
+        # default="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt",
+        default="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt",
         # default="models/Paint-by-Example/No_FSA_CIAI/checkpoints/epoch=000019.ckpt",
         # default="models/Paint-by-Example/No_FSA_CIAI/checkpoints/epoch=000015.ckpt",
         help="path to checkpoint of model",
@@ -783,11 +783,11 @@ def main():
                             x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
                             
                             # fft fusion
-                            # start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
+                            start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
                             
                             
                             
-                            start_code=x_noisy_target
+                            # start_code=x_noisy_target
                             # start_code=x_noisy_src
                             
                             #lpf fusion

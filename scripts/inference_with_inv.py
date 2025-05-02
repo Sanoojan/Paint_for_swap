@@ -224,14 +224,14 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new_REFace_analysis/Injection_analysis/Elon/Different_combination_of_noise_fixed_0_6_tar_ft_transfer/fft_debug"
+        default="Debug/test_paint_by_example/outputs_with_structure"
     )
     parser.add_argument(
         "--Base_dir",
         type=str,
         nargs="?",
         help="dir to write cropped_images",
-        default="results_video_new_REFace_analysis"
+        default="Debug/test_paint_by_example"
     )
     parser.add_argument(
         "--skip_grid",
@@ -353,8 +353,8 @@ def main():
         "--src_image",
         type=str,
         help="src_image",
-        # default="examples/FaceSwap_10/Source/will_smith.jpeg"
-        default="examples/FaceSwap_10/Source/elon.jpeg"
+        default="examples/FaceSwap_10/Source/will_smith.jpeg"
+        # default="examples/FaceSwap_10/Source/elon.jpeg"
     )
     parser.add_argument(
         "--src_image_mask",
@@ -369,13 +369,14 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project_ffhq.yaml",
+        default="configs/v1_copy.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt",
+        default="checkpoints/model.ckpt",
+        # default="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt",
         # default="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt",
         # default="models/Paint-by-Example/No_FSA_CIAI/checkpoints/epoch=000019.ckpt",
         # default="models/Paint-by-Example/No_FSA_CIAI/checkpoints/epoch=000015.ckpt",
@@ -676,8 +677,8 @@ def main():
                     
                     ##############  Src Reconstruction ##########
                     ref_img_inv=ref_img_inv_ori
-                    landmarks_src=model.get_landmarks(ref_img_inv.unsqueeze(0)) 
-                    cond_w_src=model.conditioning_with_feat(ref_imgs[0].unsqueeze(0).to(torch.float32),landmarks=landmarks_src,tar=ref_img_inv.unsqueeze(0).to("cuda").to(torch.float32)).float()
+                    # landmarks_src=model.get_landmarks(ref_img_inv.unsqueeze(0)) 
+                    cond_w_src=model.conditioning_with_feat(ref_imgs[0].unsqueeze(0).to(torch.float32),landmarks=None,tar=ref_img_inv.unsqueeze(0).to("cuda").to(torch.float32)).float()
                     cond_w_src=cond_w_src.repeat(test_batch.shape[0],1,1)
                     ############################
                     
