@@ -64,6 +64,8 @@ parser.add_argument('path', type=str, nargs=2,
                     default=['/share/data/drive_3/Sanoojan/needed/Paint_for_swap/dataset/FaceData/CelebAMask-HQ/CelebA-HQ-img', 'results/test_bench/results'],
                     help=('Paths to the generated images or '
                           'to .npz statistic files'))
+parser.add_argument('--video_names_details', type=str, default='dataset/FaceData/Data/VFHQ-Test/data_matching.yaml',
+                    help=('Path to the video names details file'))
 parser.add_argument('--vidfolders', type=int,default=1000)
 parser.add_argument('--num_imgs', type=int,default=0)
 parser.add_argument('--subfolders', type=str,default=None)
@@ -343,12 +345,27 @@ def main():
         num_workers = args.num_workers
     
     
-    vids=args.vidfolders 
+    #  
     num_imgs=args.num_imgs
     
-    list_videos = natsorted(os.listdir(args.path[1]))
+    
+    
+    video_names = []    
+    with open(args.video_names_details, 'r') as f:
+        lines = f.readlines()
+        # breakpoint()
+        for line in lines:
+            vid = line.strip().split(': ')[0]
+            video_names.append(vid)
+    list_videos=video_names
+    list_videos=natsorted(list_videos)
+    
+    if args.vidfolders >0:
+        list_videos = list_videos[:args.vidfolders]
+    
+    
     Pose_values= []
-    for i in range(vids):
+    for i in range(len(list_videos)):
         target_path= os.path.join(args.path[0],list_videos[i])
         
         Results_path= os.path.join(args.path[1],list_videos[i])

@@ -14,6 +14,10 @@ from ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters, mak
 from PIL import Image
 from ldm.models.pnp_utils import *
 from scripts.face_swap_utils import *
+from scripts.temporal_flow import batch_flow_align,batch_flow_align_latent
+
+
+
 
 def load_ddim_latents_at_t(t, ddim_latents_path):
     ddim_latents_at_t_path = os.path.join(ddim_latents_path, f"ddim_latents_{t}.pt")
@@ -284,7 +288,7 @@ class DDIMSampler(object):
         #pnp feature transfer    
         
         # register_conv_injection(self, 1) 
-        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,6,7,8],fusion="replace")
+        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,6],fusion="temporal")
         
         
         for i, step in enumerate(iterator):
@@ -451,8 +455,10 @@ class DDIMSampler(object):
                 # save_noise=fft_fusion(x_noisy_target,x_noisy_src,center=17,center_exclude=0)
                 save_noise=x_noisy_target
                 # save_noise=x_noisy_src
-                
-            
+            if i == len(timesteps)-1:
+                save_noise_2=fft_fusion(x_noisy_target,x_noisy_src,center=17,center_exclude=0)
+                save_latent_img(model,save_noise,path=f"Debug/yohan/comb_check.jpg",ind=4)
+                breakpoint()
             
             # save noise
             torch.save(
@@ -591,6 +597,7 @@ class DDIMSampler(object):
         x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
         return x_prev, pred_x0
     
+
     
     @torch.no_grad()
     def p_sample_ddim_with_inverse(self, x, c, t, index, target_conditioning=None,
@@ -625,13 +632,15 @@ class DDIMSampler(object):
             c_in = torch.cat([unconditional_conditioning, c]) #c_in: 2,1,768
             c_in=torch.cat([c_in, target_conditioning],dim=0)
             
-            e_t_uncond, e_t,_ = self.model.apply_model(x_in, t_in, c_in).chunk(3)
+            e_t_uncond, e_t, e_t_recon = self.model.apply_model(x_in, t_in, c_in).chunk(3)
             
             e_t = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond) #1,4,64,64
+            e_t_recon = e_t_recon + unconditional_guidance_scale * (e_t_recon - e_t_uncond) #1,4,64,64
 
         if score_corrector is not None:
             assert self.model.parameterization == "eps"
             e_t = score_corrector.modify_score(self.model, e_t, x, t, c, **corrector_kwargs)
+            e_t_recon = score_corrector.modify_score(self.model, e_t_recon, x, t, c, **corrector_kwargs)
 
         alphas = self.model.alphas_cumprod if use_original_steps else self.ddim_alphas
         alphas_prev = self.model.alphas_cumprod_prev if use_original_steps else self.ddim_alphas_prev
@@ -646,16 +655,49 @@ class DDIMSampler(object):
         # current prediction for x_0
         if x.shape[1]!=4:
             pred_x0 = (x[:,:4,:,:] - sqrt_one_minus_at * e_t) / a_t.sqrt()
+            pred_x0_recon = (ddim_inv_t[:,:4,:,:] - sqrt_one_minus_at * e_t_recon) / a_t.sqrt()
+            
         else:
             pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
+            pred_x0_recon = (ddim_inv_t - sqrt_one_minus_at * e_t_recon) / a_t.sqrt()   
         if quantize_denoised:
             pred_x0, _, *_ = self.model.first_stage_model.quantize(pred_x0)
+            pred_x0_recon, _, *_ = self.model.first_stage_model.quantize(pred_x0_recon)
         # direction pointing to x_t
         dir_xt = (1. - a_prev - sigma_t**2).sqrt() * e_t
         noise = sigma_t * noise_like(dir_xt.shape, device, repeat_noise) * temperature
         if noise_dropout > 0.:
             noise = torch.nn.functional.dropout(noise, p=noise_dropout)
         x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
+        
+        
+        dir_xt_recon = (1. - a_prev - sigma_t**2).sqrt() * e_t_recon
+        noise_recon = sigma_t * noise_like(dir_xt_recon.shape, device, repeat_noise) * temperature
+        if noise_dropout > 0.:  
+            noise_recon = torch.nn.functional.dropout(noise_recon, p=noise_dropout)
+        x_prev_recon = a_prev.sqrt() * pred_x0_recon + dir_xt_recon + noise_recon
+        
+        # if t[0].item()<5:
+        #     print(t)
+        #     x_prev = batch_flow_align(
+        #         x_prev=x_prev,
+        #         x_prev_recon=x_prev_recon,
+        #         decode_fn=self.model.decode_first_stage,# or appropriate decoder
+        #         encode_fn= self.model.encode_first_stage,
+        #         first_stage_fn=self.model.get_first_stage_encoding,
+        #         alpha=0.0  # control temporal smoothing
+        #     )
+            
+            # x_prev = batch_flow_align_latent(
+            #     x_prev=x_prev,
+            #     x_prev_recon=x_prev_recon,
+            #     decode_fn=self.model.decode_first_stage,# or appropriate decoder
+            #     encode_fn= self.model.encode_first_stage,
+            #     first_stage_fn=self.model.get_first_stage_encoding,
+            #     alpha=0.0  # control temporal smoothing
+            # )
+        
+        
         return x_prev, pred_x0
     
     

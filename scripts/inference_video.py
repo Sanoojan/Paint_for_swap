@@ -508,7 +508,8 @@ def run_inference(model, sampler, opt, device, config):
                             ref_img_inv=ref_img_inv.to(device)
                             encoder_posterior_ref=model.encode_first_stage(ref_img_inv)
                             z_ref = model.get_first_stage_encoding(encoder_posterior_ref)
-                            z2=torch.cat([z2,z_ref],dim=0)
+                            z2_tar=z2
+                            z2=torch.cat([z2_tar,z_ref],dim=0)
                             inverse_cond_inv=torch.cat([inverse_cond,cond_w_src],dim=0)
                             test_model_kwargs_inv=test_model_kwargs.copy()
                             
@@ -543,7 +544,14 @@ def run_inference(model, sampler, opt, device, config):
                             
                             # start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=1.0,beta=0.8,normalized=True)
                             start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
-                            
+                            # start_code= batch_flow_align_latent(
+                            #         x_prev=start_code,
+                            #         x_prev_recon=z2_tar,
+                            #         decode_fn=model.decode_first_stage,# or appropriate decoder
+                            #         encode_fn= model.encode_first_stage,
+                            #         first_stage_fn=model.get_first_stage_encoding,
+                            #         alpha=0.0  # control temporal smoothing
+                            #     )
                             
                         elif use_prior:
                             prior=prior.to(device)

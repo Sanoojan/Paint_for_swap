@@ -55,6 +55,7 @@ from scripts.face_swap_utils import *
 
 # cos = nn.CosineSimilarity(dim=0)
 import numpy as np  
+from scripts.temporal_flow import *
 
 # load safety model
 safety_model_id = "CompVis/stable-diffusion-safety-checker"
@@ -224,7 +225,7 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new_REFace_analysis/Temporal_analysis/fft_3_1_start"
+        default="results_video_new_REFace_analysis/Temporal_analysis/fft_3_1_debug_8"
     )
     parser.add_argument(
         "--Base_dir",
@@ -723,6 +724,16 @@ def main():
                         z = model.get_first_stage_encoding(encoder_posterior)
                         
                         
+                        # x = test_enc(
+                        #     x_prev=x,
+                        #     x_prev_recon=None,
+                        #     decode_fn=model.decode_first_stage,# or appropriate decoder
+                        #     encode_fn= model.encode_first_stage,
+                        #     first_stage_fn=model.get_first_stage_encoding,
+                        #     alpha=1.0  # control temporal smoothing
+                        # )
+                        
+                        
                         t=int(opt.target_start_noise_t)
                         # t = torch.ones((x.shape[0],), device=device).long()*t
                         t = torch.randint(t-1, t, (x.shape[0],), device=device).long()
@@ -744,16 +755,17 @@ def main():
                             
                             inverse_steps=50
                             
-                            prior=prior.to(device)
-                            encoder_posterior_2=model.encode_first_stage(prior)
-                            z2 = model.get_first_stage_encoding(encoder_posterior_2)
+                            # prior=prior.to(device)
+                            # encoder_posterior_2=model.encode_first_stage(prior)
+                            # z2 = model.get_first_stage_encoding(encoder_posterior_2)
                             
                             ######## Src Reconstruction ###########
                             ref_img_inv=ref_img_inv.repeat(test_batch.shape[0],1,1,1)
                             ref_img_inv=ref_img_inv.to(device)
                             encoder_posterior_ref=model.encode_first_stage(ref_img_inv)
                             z_ref = model.get_first_stage_encoding(encoder_posterior_ref)
-                            z2=torch.cat([z2,z_ref],dim=0)
+                            z2_tar=z2
+                            z2=torch.cat([z2_tar,z_ref],dim=0)
                             inverse_cond_inv=torch.cat([inverse_cond,cond_w_src],dim=0)
                             test_model_kwargs_inv=test_model_kwargs.copy()
                             
@@ -782,10 +794,31 @@ def main():
                             
                             x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
                             
+                            
+                            
+                            
+                            
                             # fft fusion
                             start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
                             
+                            # start_code= batch_flow_align_latent(
+                            #         x_prev=start_code,
+                            #         x_prev_recon=z2_tar,
+                            #         decode_fn=model.decode_first_stage,# or appropriate decoder
+                            #         encode_fn= model.encode_first_stage,
+                            #         first_stage_fn=model.get_first_stage_encoding,
+                            #         alpha=0.9  # control temporal smoothing
+                            #     )
+                            # warping the latents by target video
                             
+                            
+                            
+                            # load  as start_code
+                            
+                            # start_code_all=torch.from_numpy(np.load("results_video_new_REFace_analysis/Temporal_analysis/noises.npy")).to(device)
+                            # start_code=start_code_all[0:opt.n_samples] # b,64,64,4
+                            # start_code=start_code.to(device)
+                            # start_code=start_code.permute(0,3,1,2)
                             
                             # start_code=x_noisy_target
                             # start_code=x_noisy_src

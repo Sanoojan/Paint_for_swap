@@ -56,6 +56,39 @@ def register_time(model, t):
 
 def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_blocks=False,output_blocks=True,middle_block=False,attn_component='attn1',chunks=3,block_indices=None, fusion="replace"):
     
+    def temporal_attention(x, window_size=5, sigma=1.0):
+        """
+        Args:
+            x: Tensor of shape (T, C, H, W) — a sequence of frames.
+            window_size: Number of frames to consider (must be odd).
+            sigma: Standard deviation of the Gaussian kernel.
+        Returns:
+            output: Gaussian-weighted average tensor of shape (T, C, H, W)
+        """
+        T = x.shape[0]
+        pad = window_size // 2
+        output = torch.zeros_like(x)
+
+        # Create Gaussian weights
+        offsets = torch.arange(-pad, pad + 1, dtype=torch.float32)
+        gauss_kernel = torch.exp(-0.5 * (offsets / sigma) ** 2)
+        gauss_kernel /= gauss_kernel.sum()  # Normalize
+
+        for t in range(T):
+            weighted_sum = 0.0
+            weight_total = 0.0
+
+            for i, offset in enumerate(offsets):
+                idx = t + int(offset.item())
+                if 0 <= idx < T:
+                    weight = gauss_kernel[i]
+                    weighted_sum += weight * x[idx]
+                    weight_total += weight
+
+            output[t] = weighted_sum / weight_total  # (Optional: should already be normalized)
+
+        return output
+    
     def spa_attn_forward(self):
         
         def forward( x, context=None, mask=None,feature_transfer=True):
@@ -101,10 +134,23 @@ def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_b
                         
                         q[chunk_size:2*chunk_size]=q[:chunk_size]
                         k[chunk_size:2*chunk_size]=k[:chunk_size]
+                        # v[chunk_size:2*chunk_size]=v[:chunk_size]
                         
                         q[2*chunk_size:]=q[:chunk_size]
                         k[2*chunk_size:]=k[:chunk_size]
+                        # v[2*chunk_size:]=v[:chunk_size]
                         print('pnp feature transfering by replace')
+                        
+                    elif fusion=="temporal":
+                        # q[:chunk_size]  --> Target Video, q[chunk_size:2*chunk_size] --> swapping, q[2*chunk_size:] --> unconditional
+                        temp1 = temporal_attention(q[:chunk_size])
+                        temp2 = temporal_attention(k[:chunk_size])
+
+                        q[chunk_size:2*chunk_size]= temp1
+                        k[chunk_size:2*chunk_size]= temp2
+                        
+                        q[2*chunk_size:]= temp1
+                        k[2*chunk_size:]= temp2
                     elif fusion=="adaIn":
                         q[chunk_size:2*chunk_size]=AdaIn_fusion_for_attn(q[:chunk_size],q[chunk_size:2*chunk_size],alpha=0.9)  
                         k[chunk_size:2*chunk_size]=AdaIn_fusion_for_attn(k[:chunk_size],k[chunk_size:2*chunk_size],alpha=0.9)

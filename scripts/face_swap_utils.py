@@ -66,6 +66,33 @@ def fft_fusion(noise_A, noise_B, center=16, center_exclude=3):
 
     return combined
 
+def fft_fusion_warp(noise_A, noise_B, center=16, center_exclude=3,lm_src=None,lm_tar=None):
+    # Apply FFT over H and W for each batch and channel
+    fft_A = torch.fft.fft2(noise_A, dim=(-2, -1))
+    fft_B = torch.fft.fft2(noise_B, dim=(-2, -1))
+
+    fft_A_shift = torch.fft.fftshift(fft_A, dim=(-2, -1))
+    fft_B_shift = torch.fft.fftshift(fft_B, dim=(-2, -1))
+
+    B, C, H, W = noise_A.shape
+    cx, cy = H // 2, W // 2
+
+    # Create a circular mask instead of a square one
+    Y, X = torch.meshgrid(torch.arange(H, device=noise_A.device), 
+                          torch.arange(W, device=noise_A.device), indexing='ij')
+    dist = torch.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
+    mask = ((dist <= center) & (dist > center_exclude)).float()
+    mask = mask[None, None, :, :]  # shape: (1, 1, H, W)
+
+    # Blend FFTs using the circular mask
+    combined_fft = fft_A_shift * (1 - mask) + fft_B_shift * mask
+
+    # Inverse FFT to return to the spatial domain
+    combined_fft = torch.fft.ifftshift(combined_fft, dim=(-2, -1))
+    combined = torch.fft.ifft2(combined_fft, dim=(-2, -1)).real
+
+    return combined
+
 
 
 def lpf_fusion(noise_A, noise_B, kernel_size=5, sigma=1.0):
