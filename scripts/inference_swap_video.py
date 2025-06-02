@@ -1,7 +1,7 @@
 import argparse, os, sys, glob
 
 #set cuda device 
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import cv2
 import torch
 import numpy as np
@@ -225,7 +225,7 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new_REFace_analysis/Temporal_analysis/fft_3_1_debug_8"
+        default="results_video_new_REFace_analysis/Temporal_analysis/temporall_gaussian_averraging_with_fft_3_1"
     )
     parser.add_argument(
         "--Base_dir",
@@ -329,7 +329,7 @@ def main():
     parser.add_argument(
         "--n_frames",
         type=int,
-        default=6,
+        default=18,
         help="how many samples to produce for each given prompt. A.k.a. batch size",
     )
     parser.add_argument(
@@ -354,8 +354,8 @@ def main():
         "--src_image",
         type=str,
         help="src_image",
-        default="examples/FaceSwap_10/Source/will_smith.jpeg"
-        # default="examples/FaceSwap_10/Source/elon.jpeg"
+        # default="examples/FaceSwap_10/Source/will_smith.jpeg"
+        default="examples/FaceSwap_10/Source/elon.jpeg"
     )
     parser.add_argument(
         "--src_image_mask",
@@ -376,8 +376,8 @@ def main():
     parser.add_argument(
         "--ckpt",
         type=str,
-        # default="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt",
-        default="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt",
+        default="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt",
+        # default="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt",
         # default="models/Paint-by-Example/No_FSA_CIAI/checkpoints/epoch=000019.ckpt",
         # default="models/Paint-by-Example/No_FSA_CIAI/checkpoints/epoch=000015.ckpt",
         help="path to checkpoint of model",
@@ -789,17 +789,19 @@ def main():
                                          unconditional_guidance_scale=opt.scale,
                                          unconditional_conditioning=None,inverse_dir=inverse_results_dir,
                                          batch_size=test_batch.shape[0],
-                                         test_model_kwargs=test_model_kwargs_inv
+                                         test_model_kwargs=test_model_kwargs_inv,
+                                         src_lm=landmarks_src,
+                                         tar_lm=landmarks,
                                          )
                             
                             x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
                             
                             
                             
-                            
+                            start_code=x_noisy_target
                             
                             # fft fusion
-                            start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
+                            # start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
                             
                             # start_code= batch_flow_align_latent(
                             #         x_prev=start_code,

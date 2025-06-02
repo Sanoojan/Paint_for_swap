@@ -288,7 +288,7 @@ class DDIMSampler(object):
         #pnp feature transfer    
         
         # register_conv_injection(self, 1) 
-        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,6],fusion="temporal")
+        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,6,7],fusion="temporal")
         
         
         for i, step in enumerate(iterator):
@@ -345,7 +345,7 @@ class DDIMSampler(object):
     @torch.no_grad()
     def ddim_invert(self, x, cond, S, shape, eta=0., 
                     unconditional_guidance_scale=1., 
-                    unconditional_conditioning=None,inverse_dir=None,batch_size=6, **kwargs):
+                    unconditional_conditioning=None,inverse_dir=None,batch_size=6,src_lm=None,tar_lm=None, **kwargs):
         """
         Perform DDIM inversion to estimate the noise that led to the given image `x`.
 
@@ -455,10 +455,10 @@ class DDIMSampler(object):
                 # save_noise=fft_fusion(x_noisy_target,x_noisy_src,center=17,center_exclude=0)
                 save_noise=x_noisy_target
                 # save_noise=x_noisy_src
-            if i == len(timesteps)-1:
-                save_noise_2=fft_fusion(x_noisy_target,x_noisy_src,center=17,center_exclude=0)
-                save_latent_img(model,save_noise,path=f"Debug/yohan/comb_check.jpg",ind=4)
-                breakpoint()
+            # if i == 1:
+            #     save_noise_2=fft_fusion_warp(x_noisy_target,x_noisy_src,center=5,center_exclude=3,lm_src=src_lm,lm_tar=tar_lm)
+            #     save_latent_img(self.model ,save_noise_2,path=f"Debug/yohan/comb_check.jpg",ind=5)
+                
             
             # save noise
             torch.save(

@@ -86,7 +86,6 @@ parser.add_argument('--print_sim', type=bool, default=False,)
 parser.add_argument('--vidfolders', type=int,default=1000)
 parser.add_argument('--num_imgs', type=int,default=0)
 parser.add_argument('--subfolders', type=str,default=None)
-parser.add_argument('--crop_coordinates', type=str,default='./crop_coordinates')
 
 
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
@@ -105,34 +104,10 @@ def get_tensor(normalize=True, toTensor=True):
                                                 (0.5, 0.5, 0.5))]
     return torchvision.transforms.Compose(transform_list)
 
-def invert_pillow_perspective(coeff):
-    """
-    Takes 8-tuple PIL-style perspective coefficients and returns the inverse coefficients.
-    """
-    # Append 1.0 to get a full 3x3 homography matrix
-    M = np.append(coeff, 1.0).reshape(3, 3)
-    
-    # Invert the matrix
-    M_inv = np.linalg.inv(M)
-    
-    # Normalize so bottom-right is 1.0
-    M_inv /= M_inv[2, 2]
-    
-    # Convert back to 8-coefficient PIL format
-    inv_coeff = np.concatenate([M_inv[0, :], M_inv[1, :], M_inv[2, :2]])
-    return inv_coeff.astype(np.float32)
-
 class ImagePathDataset(torch.utils.data.Dataset):
-    def __init__(self, files, transforms=None, coordinate_path=None):
+    def __init__(self, files, transforms=None):
         self.files = files
         self.transforms = transforms
-        self.coordinate_path = coordinate_path
-        if coordinate_path is not None:
-            
-            self.coordinates=np.load(self.coordinate_path)
-        else:
-            self.coordinates = None
-        # breakpoint()
         device = "cuda" if torch.cuda.is_available() else "cpu"
         # _, self.preprocess = clip.load("ViT-B/32", device=device)
         # self.preprocess
@@ -141,25 +116,27 @@ class ImagePathDataset(torch.utils.data.Dataset):
         #                                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         self.transform_hopenet =  torchvision.transforms.Compose([TF.ToTensor(),TF.Resize(size=(224, 224)),
                                                      TF.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+        
+        self.transform=torchvision.transforms.Compose([TF.ToTensor(),TF.Resize(size=(224, 224)),TF.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5])])
+        
+        
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, i):
         path = self.files[i]
-        if self.coordinates is not None:
-            # breakpoint()
-            # coord=self.coordinates[i
-            coord=self.coordinates[i]
-            image = Image.open(path).convert('RGB')
-            inv_coeff=invert_pillow_perspective(coord)
-            image=image.transform((1024,1024), method=Image.PERSPECTIVE, data=inv_coeff,resample=Image.BILINEAR)
-            image = image.resize((512, 512), Image.BICUBIC)
-            image=torch.tensor(np.array(image)/255., dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
-        else:
-            image = Image.open(path).convert('RGB')
-            image = image.resize((512, 512), Image.BICUBIC)
-            image=torch.tensor(np.array(image)/255., dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
-        return image
+        im=Image.open(path).convert('RGB')
+        #resize to 512
+        im = im.resize((512, 512), Image.BICUBIC)
+        
+        im=torch.tensor(np.array(im)/255., dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
+        
+        # image=cv2.imread(str(path))
+        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # image=self.transform(Image.fromarray(image))
+        # image=torch.tensor(image).view(1,3,224,224)
+        # image = self.transform(Image.open(path).convert('RGB'))
+        return im
 
 def headpose_pred_to_degree(pred):
     device = pred.device
@@ -171,7 +148,7 @@ def headpose_pred_to_degree(pred):
     return degree
 
 def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
-                    num_workers=1,coordinate_path=None):
+                    num_workers=1):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
     -- files       : List of image files paths
@@ -196,7 +173,7 @@ def compute_features(files, model, batch_size=50, dims=2048, device='cpu',
                'Setting batch size to data size'))
         batch_size = len(files)
 
-    dataset = ImagePathDataset(files, transforms=TF.ToTensor(),coordinate_path=coordinate_path)
+    dataset = ImagePathDataset(files, transforms=TF.ToTensor())
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
                                              shuffle=False,
@@ -324,7 +301,7 @@ def calculate_activation_statistics(files, model, batch_size=50, dims=2048,
 
 
 def compute_features_wrapp(path, model, batch_size, dims, device,
-                               num_workers=1,num_imgs=16,coordinate_path=None):
+                               num_workers=1,num_imgs=16):
     if path.endswith('.npz'):
         with np.load(path) as f:
             m, s = f['mu'][:], f['sigma'][:]
@@ -351,12 +328,12 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
         numbers = [(num - mi_num) for num in numbers] # celeb
         
         pred_arr = compute_features(files, model, batch_size,
-                                               dims, device, num_workers,coordinate_path=coordinate_path)
+                                               dims, device, num_workers)
 
     return pred_arr,numbers
 
 
-def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,num_imgs=16,coordinate_path=None):
+def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,num_imgs=16):
     """Calculates the FID of two paths"""
     for p in paths:
         if not os.path.exists(p):
@@ -384,9 +361,9 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,num_
     #     fecnet.eval()
 
     feat1,ori_lab = compute_features_wrapp(paths[0], models_expression, batch_size,
-                                        dims, device, num_workers,num_imgs=num_imgs,coordinate_path=coordinate_path)
+                                        dims, device, num_workers,num_imgs=num_imgs)
     feat2,swap_lab = compute_features_wrapp(paths[1], models_expression, batch_size,
-                                        dims, device, num_workers,num_imgs=num_imgs,coordinate_path=coordinate_path)
+                                        dims, device, num_workers,num_imgs=num_imgs)
     
     # breakpoint()
     # top5 = np.sum(np.isin(np.argsort(dot_prod,axis=1)[:,-5:],swap_lab))/len(swap_lab)
@@ -447,9 +424,9 @@ def main():
     Expression_values= []
     for i in range(len(list_videos)):
         target_path= os.path.join(args.path[0],list_videos[i])
-        coordinate_path= os.path.join(args.crop_coordinates,list_videos[i],"vid_inv_transforms.npy")
+        
         Results_path= os.path.join(args.path[1],list_videos[i])
-        if args.subfolders is not None or args.subfolders != '':
+        if args.subfolders is not None:
             Results_path= os.path.join(Results_path,args.subfolders)
         
         compute_paths= [target_path,Results_path]
@@ -458,8 +435,7 @@ def main():
                                             args.batch_size,
                                             device,
                                             2048,
-                                            num_workers,num_imgs=num_imgs,
-                                            coordinate_path=coordinate_path)
+                                            num_workers,num_imgs=num_imgs)
         Expression_values.append(Expression_value)
         print('Expression_value for ',list_videos[i], ":",Expression_value)
     

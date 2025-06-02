@@ -538,12 +538,13 @@ def run_inference(model, sampler, opt, device, config):
                                             )
                             else:
                                 x_noisy = torch.load(os.path.join(inverse_results_dir_for_batch, 'ddim_latents_999.pt'))
-                                start_code=x_noisy.to(x.device)
+                                # start_code=x_noisy.to(x.device)
                             
                             x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
                             
+                            start_code=x_noisy_target
                             # start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=1.0,beta=0.8,normalized=True)
-                            start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
+                            # start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
                             # start_code= batch_flow_align_latent(
                             #         x_prev=start_code,
                             #         x_prev_recon=z2_tar,

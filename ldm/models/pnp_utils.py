@@ -56,7 +56,7 @@ def register_time(model, t):
 
 def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_blocks=False,output_blocks=True,middle_block=False,attn_component='attn1',chunks=3,block_indices=None, fusion="replace"):
     
-    def temporal_attention(x, window_size=5, sigma=1.0):
+    def temporal_attention(x, window_size=3, sigma=1.0):
         """
         Args:
             x: Tensor of shape (T, C, H, W) — a sequence of frames.

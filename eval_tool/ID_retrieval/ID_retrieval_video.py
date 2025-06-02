@@ -78,6 +78,7 @@ parser.add_argument('--target_label_path', type=str)
 parser.add_argument('--results_subfolder', type=str)
 parser.add_argument('--target_subfolder', type=str)
 parser.add_argument('--number_of_images', type=int, default=None)
+parser.add_argument('--crop_coordinates', type=str,default='./crop_coordinates')
 
 IMAGE_EXTENSIONS = {'bmp', 'jpg', 'jpeg', 'pgm', 'png', 'ppm',
                     'tif', 'tiff', 'webp'}
@@ -95,6 +96,23 @@ def un_norm_clip(x1):
     if reduce:
         x = x.squeeze(0)
     return x
+
+def invert_pillow_perspective(coeff):
+    """
+    Takes 8-tuple PIL-style perspective coefficients and returns the inverse coefficients.
+    """
+    # Append 1.0 to get a full 3x3 homography matrix
+    M = np.append(coeff, 1.0).reshape(3, 3)
+    
+    # Invert the matrix
+    M_inv = np.linalg.inv(M)
+    
+    # Normalize so bottom-right is 1.0
+    M_inv /= M_inv[2, 2]
+    
+    # Convert back to 8-coefficient PIL format
+    inv_coeff = np.concatenate([M_inv[0, :], M_inv[1, :], M_inv[2, :2]])
+    return inv_coeff.astype(np.float32)
 
 def get_tensor_clip(normalize=True, toTensor=True):
     transform_list = []
@@ -155,10 +173,16 @@ def get_tensor(normalize=True, toTensor=True):
     return torchvision.transforms.Compose(transform_list)
 
 class ImagePathDataset(torch.utils.data.Dataset):
-    def __init__(self, files, transforms=None):
+    def __init__(self, files, transforms=None,coordinate_path=None):
         self.files = files
         self.transforms = transforms
         device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.coordinate_path = coordinate_path
+        if coordinate_path is not None:
+            self.coordinates = np.load(coordinate_path)
+        else:
+            self.coordinates = None
+        
         # _, self.preprocess = clip.load("ViT-B/32", device=device)
         # self.preprocess
         # eval_transform = transforms.Compose([transforms.ToTensor(),
@@ -169,12 +193,27 @@ class ImagePathDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         path = self.files[i]
-        image = get_tensor()(Image.open(path).convert('RGB').resize((112,112))).unsqueeze(0)
+        if self.coordinates is not None:
+            # Load the coordinates for the current image
+            coord=self.coordinates[i]
+     
+            inv_coeff=invert_pillow_perspective(coord)
+            # Load the image and apply the perspective transformation
+            image = Image.open(path).convert('RGB')
+            image = image.transform((1024,1024), Image.PERSPECTIVE, inv_coeff, Image.BILINEAR)
+            image=get_tensor()(image.resize((112,112))).unsqueeze(0)
+        else:
+            image = get_tensor()(Image.open(path).convert('RGB').resize((112,112))).unsqueeze(0)
         return image
 
 
 class MaskedImagePathDataset(torch.utils.data.Dataset):
-    def __init__(self, files,maskfiles=None, transforms=None,data_name="celeba"):
+    def __init__(self, files,maskfiles=None, transforms=None,data_name="celeba",coordinate_path=None):
+        self.coordinate_path = coordinate_path
+        if coordinate_path is not None:
+            self.coordinates = np.load(coordinate_path)
+        else:
+            self.coordinates = None
         self.files = files
         self.maskfiles = maskfiles  
         self.transforms = transforms
@@ -196,9 +235,23 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         # image=Image.open(path).convert('RGB')
         # ref_img_path = self.ref_imgs[index]
         # print(path)
-        image=cv2.imread(str(path))
-        # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        if self.coordinates is not None:
+            # breakpoint()
+            # coord=self.coordinates[i
+            coord=self.coordinates[i]
+            image = Image.open(path).convert('RGB')
+            inv_coeff=invert_pillow_perspective(coord)
+            image=image.transform((1024,1024), method=Image.PERSPECTIVE, data=inv_coeff,resample=Image.BILINEAR)
+            
+            image = np.array(image)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        else:
+        
+            image=cv2.imread(str(path))
+            # ref_img = Image.open(ref_img_path).convert('RGB').resize((224,224))
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
        
 
@@ -215,6 +268,7 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
         # print("preserve:",preserve)
         # preserve = [1,2,4,5,8,9 ]
         if preserve is not None:
+            
             mask_path = self.maskfiles[i]
             ref_mask_img = Image.open(mask_path).convert('L')
             ref_mask_img = np.array(ref_mask_img)  # Convert the label to a NumPy array if it's not already
@@ -261,7 +315,7 @@ class MaskedImagePathDataset(torch.utils.data.Dataset):
 
 
 def compute_features(files,mask_files, model,other_model, batch_size=50, dims=2048, device='cpu',
-                    num_workers=1,data_name="celeba",number_of_images=None):
+                    num_workers=1,data_name="celeba",number_of_images=None,coordinates_path=None):
     """Calculates the activations of the pool_3 layer for all images.
     Params:
     -- files       : List of image files paths
@@ -287,9 +341,9 @@ def compute_features(files,mask_files, model,other_model, batch_size=50, dims=20
         batch_size = len(files)
     # breakpoint()
     
+    # breakpoint()
     
-    dataset = MaskedImagePathDataset(files,maskfiles= mask_files, transforms=TF.ToTensor(),data_name=data_name)
-    
+    dataset = MaskedImagePathDataset(files,maskfiles= mask_files, transforms=TF.ToTensor(),data_name=data_name,coordinate_path=coordinates_path)
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
                                              shuffle=False,
@@ -321,7 +375,7 @@ def compute_features(files,mask_files, model,other_model, batch_size=50, dims=20
 
 
 def compute_features_wrapp(path,mask_path, IDLoss_model,Other_model, batch_size, dims, device,
-                               num_workers=1,data_name="celeba", lables_file=None,args=None, number_of_images=None):
+                               num_workers=1,data_name="celeba", lables_file=None,args=None, number_of_images=None,coordinates_path=None):
     if path.endswith('.npz'):
         with np.load(path) as f:
             m, s = f['mu'][:], f['sigma'][:]
@@ -338,6 +392,7 @@ def compute_features_wrapp(path,mask_path, IDLoss_model,Other_model, batch_size,
         if number_of_images is not None:
             files = files[:number_of_images]
             mask_files = mask_files[:number_of_images]
+            # breakpoint()
         
         # breakpoint()
         if lables_file is None:
@@ -364,7 +419,7 @@ def compute_features_wrapp(path,mask_path, IDLoss_model,Other_model, batch_size,
             numbers = []
             # Extract the clip name from the path (the folder before model_outputs)
             
-            if args.results_subfolder is None:
+            if args.results_subfolder is None or args.results_subfolder == "":
                 clip_name = os.path.basename(path)
             else:
                 clip_name = os.path.basename(os.path.dirname(path))
@@ -382,7 +437,7 @@ def compute_features_wrapp(path,mask_path, IDLoss_model,Other_model, batch_size,
         # print(f'Numbers: {numbers}')
         
         pred_arr = compute_features(files,mask_files, IDLoss_model,Other_model, batch_size,
-                                               dims, device, num_workers,data_name=data_name,number_of_images=args.number_of_images)
+                                               dims, device, num_workers,data_name=data_name,number_of_images=args.number_of_images,coordinates_path=coordinates_path)
 
     return pred_arr,numbers
 
@@ -401,6 +456,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
     std_simirities = []
     mean_top1 = []
     mean_top5 = []
+    vidds = []
     pathsdup= paths.copy()
 
     if args.arcface:
@@ -419,7 +475,10 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
         
 
         paths = pathsdup.copy()
-        if args.results_subfolder is None:
+        
+        coordinates_path = os.path.join(args.crop_coordinates, subdirectory , "vid_inv_transforms.npy")
+        
+        if args.results_subfolder is None or args.results_subfolder == "":
             paths[1] = os.path.join(paths[1], subdirectory)
         else:
             paths[1] = os.path.join(paths[1], subdirectory, args.results_subfolder)
@@ -437,18 +496,23 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
     
         try:
             feat1,ori_lab = compute_features_wrapp(paths[0],paths[2], IDLoss_model,None, batch_size,
-                                                dims, device, num_workers,data_name=data_name,args=args)
+                                                dims, device, num_workers,data_name="celeba",args=args,coordinates_path=None,number_of_images=None)   #  celeb source face images
             feat2,swap_lab = compute_features_wrapp(paths[1],paths[3], IDLoss_model,None, batch_size,
-                                                dims, device, num_workers,data_name=data_name, lables_file=args.target_label_path,args=args,number_of_images=args.number_of_images)
+                                                dims, device, num_workers,data_name=data_name, lables_file=args.target_label_path,args=args,number_of_images=args.number_of_images,coordinates_path=coordinates_path)
+            
         except Exception as e:
             print(f"Error processing {subdirectory}: {e}")
             continue
-        # dot produc to get similarity
         
+        # breakpoint()
+        # dot produc to get similarity
+        # breakpoint()
         swap_lab = np.array(swap_lab)
         swap_lab= np.repeat(swap_lab, feat2.shape[0])
         dot_prod= np.dot(feat2,feat1.T)
         pred= np.argmax(dot_prod,axis=1)
+
+        
         # find accuracy of top 1 and top 5
         top1 = np.sum(np.argmax(dot_prod,axis=1)==swap_lab)/len(swap_lab)
         top5_predictions = np.argsort(dot_prod, axis=1)[:, -5:]  # Get indices of top-5 predictions
@@ -459,6 +523,14 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
         feat_sel=feat1[swap_lab]
         feat_sel=feat_sel/np.linalg.norm(feat_sel,axis=1,keepdims=True)
         feat2=feat2/np.linalg.norm(feat2,axis=1,keepdims=True)
+        
+        #VIDD
+        diffs = feat2[:-1] - feat2[1:]  # Shape: (15, 512)
+        vidd = np.linalg.norm(diffs, axis=1).mean()  # L2 norm along feature dim, then average
+        # print("VIDD:", vidd.item())
+        vidds.append(vidd)
+        
+        
         similarities=np.diagonal(np.dot(feat_sel,feat2.T))
         
         
@@ -477,7 +549,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
         mean_top5.append(top5)
 
       
-    return mean_top1, mean_top5, mean_simirities, std_simirities
+    return mean_top1, mean_top5, mean_simirities, std_simirities,vidds
 
 
 def main():
@@ -494,7 +566,7 @@ def main():
     else:
         num_workers = args.num_workers
 
-    mean_top1, mean_top5, mean_similarities, std_similarities  = calculate_id_given_paths(args.path,
+    mean_top1, mean_top5, mean_similarities, std_similarities ,vidds = calculate_id_given_paths(args.path,
                                         args.batch_size,
                                         device,
                                         2048,
@@ -505,6 +577,8 @@ def main():
     print('Top-5 accuracy: {:.2f}%'.format(np.mean(mean_top5) * 100))
     print('Mean ID feat:  {:.2f}'.format(np.mean(mean_similarities)))
     print('Std ID feat:  {:.2f}'.format(np.mean(std_similarities)))
+    print('VIDD:  {:.2f}'.format(np.mean(vidds)))
+    
     
     # if args.print_sim:
     #     print('Similarities: \n ')
