@@ -2,8 +2,8 @@
 ##### EXPERIMENTAL #####
 
 Base_dir="outputs/VFHQ_test_full"
-Experiment_name="18_PnP_with_feature_injection_gaussian_temporal_smoothneing_3.0scale"
-device=1
+Experiment_name="19_PnP_with_fft_feature_injection0_2_replace_3_8"
+device=2
 
 CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project_ffhq.yaml"
 DATA_CONFIG="dataset/FaceData/Data/VFHQ-Test/data_matching.yaml"

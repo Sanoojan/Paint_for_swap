@@ -56,7 +56,7 @@ def register_time(model, t):
 
 def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_blocks=False,output_blocks=True,middle_block=False,attn_component='attn1',chunks=3,block_indices=None, fusion="replace"):
     
-    def temporal_attention(x, window_size=3, sigma=1.0):
+    def temporal_attention(x, window_size=5, sigma=1.0):
         """
         Args:
             x: Tensor of shape (T, C, H, W) — a sequence of frames.
@@ -165,9 +165,42 @@ def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_b
                         k[2*chunk_size:]=mix_source_and_target(k[:chunk_size],k[2*chunk_size:],alpha=0.5)
                         
                         # print('pnp feature transfering')
+                    elif fusion == "fft":
+                        # print(q.shape)
+                        # q[chunk_size:2*chunk_size]=q[:chunk_size]
+                        # k[chunk_size:2*chunk_size]=k[:chunk_size]
+                        # # v[chunk_size:2*chunk_size]=v[:chunk_size]
+                        
+                        # q[2*chunk_size:]=q[:chunk_size]
+                        # k[2*chunk_size:]=k[:chunk_size]
+                        
+                        
+                        q[chunk_size:2*chunk_size]=combine_fft_high_low(q[:chunk_size],q[chunk_size:2*chunk_size],split_ratio=0.8)
+                        k[chunk_size:2*chunk_size]=combine_fft_high_low(k[:chunk_size],k[chunk_size:2*chunk_size],split_ratio=0.8)
+                        
+                        q[2*chunk_size:]=combine_fft_high_low(q[:chunk_size],q[2*chunk_size:],split_ratio=0.8)
+                        k[2*chunk_size:]=combine_fft_high_low(k[:chunk_size],k[2*chunk_size:],split_ratio=0.8)
                     
-                    
-                    
+                    elif fusion == "fft_vfixed":
+                        # print(q.shape)
+                        # q[chunk_size:2*chunk_size]=q[:chunk_size]
+                        # k[chunk_size:2*chunk_size]=k[:chunk_size]
+                        # # v[chunk_size:2*chunk_size]=v[:chunk_size]
+                        
+                        # q[2*chunk_size:]=q[:chunk_size]
+                        # k[2*chunk_size:]=k[:chunk_size]
+                        
+                        
+                        q[chunk_size:2*chunk_size]=combine_fft_high_low(q[:chunk_size],q[chunk_size:2*chunk_size],split_ratio=0.8)
+                        k[chunk_size:2*chunk_size]=combine_fft_high_low(k[:chunk_size],k[chunk_size:2*chunk_size],split_ratio=0.8)
+                        
+                        q[2*chunk_size:]=combine_fft_high_low(q[:chunk_size],q[2*chunk_size:],split_ratio=0.8)
+                        k[2*chunk_size:]=combine_fft_high_low(k[:chunk_size],k[2*chunk_size:],split_ratio=0.8)
+
+                        # v[:chunk_size]=v[0].unsqueeze(0).repeat(chunk_size,1,1) # repeat the v for all chunks
+                        v[chunk_size:2*chunk_size]=v[chunk_size].repeat(chunk_size,1,1) 
+                        v[2*chunk_size:]=v[2*chunk_size].repeat(chunk_size,1,1) 
+                        # v=v[0].repeat(chunks,1,1) # repeat the v for all chunks
                     
                 elif chunks==2:
                     print('pnp feature transfering at inv tar to src')
@@ -177,7 +210,8 @@ def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_b
                     # print('pnp feature transfering at src to tar')
                     # q[:chunk_size]=q[chunk_size:]
                     # k[:chunk_size]=k[chunk_size:]
-                    
+             
+            
                     
             q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 

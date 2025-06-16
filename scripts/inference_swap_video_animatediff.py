@@ -1,7 +1,7 @@
 import argparse, os, sys, glob
 
 #set cuda device 
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import cv2
 import torch
 import numpy as np
@@ -56,6 +56,9 @@ from scripts.face_swap_utils import *
 # cos = nn.CosineSimilarity(dim=0)
 import numpy as np  
 from scripts.temporal_flow import *
+
+
+from AnimateDiff.animatediff.models.unet import UNet3DConditionModel
 
 # load safety model
 safety_model_id = "CompVis/stable-diffusion-safety-checker"
@@ -225,7 +228,7 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new_REFace_analysis/New_Temporal_analysis_smith/pnp_temporal_averagingw5_67"
+        default="results_video_new_REFace_analysis/New_Temporal_analysis/PnP"
     )
     parser.add_argument(
         "--Base_dir",
@@ -348,8 +351,7 @@ def main():
         "--target_video",
         type=str,
         help="target_video",
-        # default="dataset/FaceData/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+2W7Bk7EcRMg+P0+C1+F3663-3770/vid.mp4",
-        default="dataset/FaceData/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+1qf8dZpLED0+P2+C1+F5731-5855/vid.mp4"
+        default="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/GT/Vid_Interval1_512x512_LANCZOS4/Clip+1qf8dZpLED0+P2+C1+F5731-5855/vid.mp4",
     )
     parser.add_argument(
         "--src_image",
@@ -426,6 +428,10 @@ def main():
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model = model.to(device)
+    
+    
+    
+    unet = UNet3DConditionModel.from_pretrained_2d(opt.ckpt, subfolder="unet").cuda()
 
     if opt.plms:
         sampler = PLMSSampler(model)
@@ -800,11 +806,8 @@ def main():
                             
                             
                             start_code=x_noisy_target
-                            # start_code=start_code[0].repeat(opt.n_samples,1,1,1) # b,64,64,4
                             
                             # fft fusion
-                            
-                            
                             # start_code=fft_fusion(x_noisy_target,x_noisy_src,center=3,center_exclude=1)
                             
                             # start_code= batch_flow_align_latent(
@@ -825,8 +828,6 @@ def main():
                             # start_code=start_code_all[0:opt.n_samples] # b,64,64,4
                             # start_code=start_code.to(device)
                             # start_code=start_code.permute(0,3,1,2)
-                            
-                            # start_code=(x_noisy_target+ start_code)/1.41
                             
                             # start_code=x_noisy_target
                             # start_code=x_noisy_src

@@ -288,10 +288,13 @@ class DDIMSampler(object):
         #pnp feature transfer    
         
         # register_conv_injection(self, 1) 
-        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,6,7],fusion="temporal")
-        
+        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[6,7],fusion="temporal")
+        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,8],fusion="replace")
+        # register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2],fusion="fft")
         
         for i, step in enumerate(iterator):
+            # if i<15:
+            #     continue
             
             # if i==total_steps//2:
                 # register_spa_attn_injection(self, 1,switch_on=False,input_blocks=False,output_blocks=True,attn_component="attn1")
@@ -307,13 +310,15 @@ class DDIMSampler(object):
             if target_conditioning is not None:
                 
                 # pnp conv transfer
-                
-                
+                src_start=None
+                # if i==0:
+                #     # create random noise like img
+                #     src_start=torch.randn_like(img)
                 
                 outs = self.p_sample_ddim_with_inverse(img, cond, ts, 
                                         target_conditioning=target_conditioning,
                                         inverse_results_dir=inverse_results_dir,
-                                        index=index, use_original_steps=ddim_use_original_steps,
+                                        index=index,src_start=None, use_original_steps=ddim_use_original_steps,
                                         quantize_denoised=quantize_denoised, temperature=temperature,
                                         noise_dropout=noise_dropout, score_corrector=score_corrector,
                                         corrector_kwargs=corrector_kwargs,
@@ -375,6 +380,10 @@ class DDIMSampler(object):
         # register_spa_attn_injection(self, 1,switch_on=True,input_blocks=True,middle_block=False, output_blocks=True,attn_component="attn1", chunks=2,block_indices=[0,1,2])
         
         for i, step in enumerate(tqdm(timesteps, desc="DDIM Inversion", total=len(timesteps))):
+            
+            #skip last step
+            # if i > len(timesteps) :
+            #     continue
             
             # if i>len(timesteps)//2:
             #     register_spa_attn_injection(self, 1,switch_on=False,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=2)
@@ -601,7 +610,7 @@ class DDIMSampler(object):
     
     @torch.no_grad()
     def p_sample_ddim_with_inverse(self, x, c, t, index, target_conditioning=None,
-                      inverse_results_dir=None,repeat_noise=False, use_original_steps=False, quantize_denoised=False,
+                      inverse_results_dir=None,repeat_noise=False,src_start=None, use_original_steps=False, quantize_denoised=False,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
                       unconditional_guidance_scale=1., unconditional_conditioning=None,**kwargs):
         b, *_, device = *x.shape, x.device
@@ -612,17 +621,27 @@ class DDIMSampler(object):
         if 'test_model_kwargs' in kwargs:
             kwargs=kwargs['test_model_kwargs']
             x = torch.cat([x, kwargs['inpaint_image'], kwargs['inpaint_mask']],dim=1)
+            if src_start is not None:
+                x_uncond = torch.cat([src_start, kwargs['inpaint_image'], kwargs['inpaint_mask']],dim=1)
+            else:
+                x_uncond=x
             ddim_inv_t = torch.cat([ddim_inv_t, kwargs['inpaint_image'], kwargs['inpaint_mask']],dim=1)
             
         elif 'rest' in kwargs:
             x = torch.cat((x, kwargs['rest']), dim=1)
+            if src_start is not None:
+                x_uncond = torch.cat([src_start, kwargs['rest']], dim=1)
+            else:
+                x_uncond = x
+            
             ddim_inv_t = torch.cat((ddim_inv_t, kwargs['rest']), dim=1)
         else:
             raise Exception("kwargs must contain either 'test_model_kwargs' or 'rest' key")
         if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
             e_t = self.model.apply_model(x, t, c)
+            
         else:  # check @ sanoojan
-            x_in = torch.cat([x] * 2) #x_in: 2,9,64,64
+            x_in = torch.cat([x,x_uncond]) #x_in: 2,9,64,64
             x_in=torch.cat([x_in,ddim_inv_t],dim=0)
             t_in = torch.cat([t] * 3)
             # if self.model.stack_feat:

@@ -206,7 +206,75 @@ def AdaIn_fusion_for_attn(noise_A, noise_B, alpha=0.71,normalized=True):
         return alpha*fused_noise
 
 
+def fft_fusion_for_attn(noise_A, noise_B, center=16, center_exclude=3):
+    # Apply FFT over H and W for each batch and channel
+    # convert to folat
+    noise_A = noise_A.float()
+    noise_B = noise_B.float()
+    fft_A = torch.fft.fft2(noise_A, dim=(-2, -1))
+    fft_B = torch.fft.fft2(noise_B, dim=(-2, -1))
 
+    fft_A_shift = torch.fft.fftshift(fft_A, dim=(-2, -1))
+    fft_B_shift = torch.fft.fftshift(fft_B, dim=(-2, -1))
+
+    B, C, H, W = noise_A.shape
+    cx, cy = H // 2, W // 2
+
+    # Create a circular mask instead of a square one
+    Y, X = torch.meshgrid(torch.arange(H, device=noise_A.device), 
+                          torch.arange(W, device=noise_A.device), indexing='ij')
+    dist = torch.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
+    mask = ((dist <= center) & (dist > center_exclude)).float()
+    mask = mask[None, None, :, :]  # shape: (1, 1, H, W)
+
+    # Blend FFTs using the circular mask
+    combined_fft = fft_A_shift * (1 - mask) + fft_B_shift * mask
+
+    # Inverse FFT to return to the spatial domain
+    combined_fft = torch.fft.ifftshift(combined_fft, dim=(-2, -1))
+    combined = torch.fft.ifft2(combined_fft, dim=(-2, -1)).real
+    
+    combined=combined.to(torch.float32)
+    # Ensure the output is float32
+
+    return combined
+
+def combine_fft_high_low(q1, q2, split_ratio=0.5):
+    """
+    Combine high-frequency components from q1 and low-frequency components from q2.
+    
+    Args:
+        q1: Tensor of shape (b, c, d)
+        q2: Tensor of shape (b, c, d)
+        split_ratio: Ratio to split between low and high frequency. Default is 0.5 (middle).
+    
+    Returns:
+        Tensor of shape (b, c, d) with combined frequency components.
+        
+    """
+    
+    q1 = q1.float()  # Ensure q1 is float
+    q2 = q2.float()  # Ensure q2 is float
+    # FFT along the last dimension
+    fft_q1 = torch.fft.fft(q1, dim=-1)
+    fft_q2 = torch.fft.fft(q2, dim=-1)
+
+    # Determine split point
+    d = q1.size(-1)
+    split_point = int(d * split_ratio)
+
+    # Initialize combined FFT
+    fft_combined = torch.zeros_like(fft_q1)
+
+    # Copy low frequencies from q2, high from q1
+    fft_combined[..., :split_point] = fft_q2[..., :split_point]   # low frequency
+    fft_combined[..., split_point:] = fft_q1[..., split_point:]   # high frequency
+
+    # Inverse FFT to get back to time domain
+    combined = torch.fft.ifft(fft_combined, dim=-1).real  # Discard imaginary part
+    combined = combined.to(torch.float32)  # Ensure the output is float32
+
+    return combined
  
 def plot_fft_3d(latent_tensor, batch_idx=0, channel_idx=0, log_scale=True,save_path="out.png"):
     """
