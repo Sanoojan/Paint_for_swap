@@ -228,10 +228,10 @@ def main():
     faceParsing_model = init_faceParsing_pretrained_model(opt.faceParser_name, opt.faceParsing_ckpt, opt.segnext_config)
         
 
-    Image_path='dataset/FaceData/CelebAMask-HQ/Val'
+    Image_path='dataset/FaceData/Data/VFHQ-Test/Celeb_Source_100'
     mask_real_path='dataset/FaceData/CelebAMask-HQ/src_mask'
-    mask_path='dataset/FaceData/CelebAMask-HQ/Val_cropped_mask'
-    save_path='dataset/FaceData/CelebAMask-HQ/Val_cropped'
+    mask_path='input_source_images/source_image_mask_celeb'
+    save_path='delete/'
     
     if not os.path.exists(mask_path):
         os.makedirs(mask_path)
@@ -240,11 +240,12 @@ def main():
     # get image list
     image_list = glob.glob(os.path.join(Image_path, '*.png'))
 
-    for i in tqdm(range(29000,30000)):
+    for i in tqdm(range(0,100)):
         try:
+            
             image_path_name=Image_path+ "/" +str(i)+ '.jpg'
             save_path_name=save_path+ "/" +str(i)+ '.jpg'
-            mask_path_name=mask_path+ "/" +str(i)+ '.png'
+            mask_path_name=mask_path+ "/" +str(i)+ '.jpg'
             mask_real_path_name=mask_real_path+ "/" +str(i)+ '.png'
             frame = cv2.imread(image_path_name)
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -256,13 +257,17 @@ def main():
             # inv_transforms_all.append(inv_transforms[0])
             T.save(save_path_name)
             
-            real_mask = cv2.imread(mask_real_path_name)
-            if real_mask is None:
-                pil_im = T.resize((1024,1024), Image.BILINEAR)
-                mask = faceParsing_demo(faceParsing_model, pil_im, convert_to_seg12=opt.seg12, model_name=opt.faceParser_name)
+            # real_mask = cv2.imread(mask_real_path_name)
+            if True:
+                try:
+                    pil_im = T.resize((1024,1024), Image.BILINEAR)
+                    mask = faceParsing_demo(faceParsing_model, pil_im, convert_to_seg12=opt.seg12, model_name=opt.faceParser_name)
+                    
+                    Image.fromarray(mask).save(mask_path_name)
+                except:
+                    print("error in face parsing", image_path_name)
+                    # read image as pil
                 
-                Image.fromarray(mask).save(mask_path_name)
-                # save T
                 
             else:
                 
@@ -274,30 +279,31 @@ def main():
                 real_mask=real_mask.resize((512,512), Image.BILINEAR)
                 real_mask.save(mask_path_name)
                 # save T
-           
         except:
-            print("error")
-            # read image as pil
-            T = Image.open(image_path_name)
-            # inv_transforms_all.append(inv_transforms[0])
-            real_mask = cv2.imread(mask_real_path_name)
-            T.save(save_path_name)
-            if real_mask is None:
-                pil_im = T.resize((1024,1024), Image.BILINEAR)
-                mask = faceParsing_demo(faceParsing_model, pil_im, convert_to_seg12=opt.seg12, model_name=opt.faceParser_name)
+            print("error in cropping", image_path_name)    
+            # except:
+            #     print("error")
+            #     # read image as pil
+            #     T = Image.open(image_path_name)
+            #     # inv_transforms_all.append(inv_transforms[0])
+            #     real_mask = cv2.imread(mask_real_path_name)
+            #     T.save(save_path_name)
+        #     if False:
+        #         pil_im = T.resize((1024,1024), Image.BILINEAR)
+        #         mask = faceParsing_demo(faceParsing_model, pil_im, convert_to_seg12=opt.seg12, model_name=opt.faceParser_name)
                 
-                Image.fromarray(mask).save(mask_path_name)
-                # save T
+        #         Image.fromarray(mask).save(mask_path_name)
+        #         # save T
                 
-            else:
+        #     else:
                 
-                real_mask = Image.fromarray(real_mask)
-                real_mask=real_mask.resize((1024,1024), Image.BILINEAR)
-                #crop using quads
-                real_mask = real_mask.crop((quads[0][0][0], quads[0][0][1], quads[0][2][0], quads[0][2][1]))
+        #         real_mask = Image.fromarray(real_mask)
+        #         real_mask=real_mask.resize((1024,1024), Image.BILINEAR)
+        #         #crop using quads
+        #         real_mask = real_mask.crop((quads[0][0][0], quads[0][0][1], quads[0][2][0], quads[0][2][1]))
                 
-                real_mask=real_mask.resize((512,512), Image.BILINEAR)
-                real_mask.save(mask_path_name)
+        #         real_mask=real_mask.resize((512,512), Image.BILINEAR)
+        #         real_mask.save(mask_path_name)
                 
             # continue
 if __name__ == "__main__":

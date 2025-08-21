@@ -14,7 +14,7 @@ from ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters, mak
 from PIL import Image
 from ldm.models.pnp_utils import *
 from scripts.face_swap_utils import *
-from scripts.temporal_flow import batch_flow_align,batch_flow_align_latent
+from scripts.temporal_flow import batch_flow_align,batch_flow_align_latent,align_by_flow,align_by_flow_high_res
 
 
 
@@ -203,6 +203,7 @@ class DDIMSampler(object):
                score_corrector=None,
                corrector_kwargs=None,
                verbose=True,
+               flow=None,
                x_T=None,
                log_every_t=100,
                unconditional_guidance_scale=1.,
@@ -241,6 +242,7 @@ class DDIMSampler(object):
                                                     score_corrector=score_corrector,
                                                     corrector_kwargs=corrector_kwargs,
                                                     x_T=x_T,
+                                                    flow=flow,
                                                     log_every_t=log_every_t,
                                                     unconditional_guidance_scale=unconditional_guidance_scale,
                                                     unconditional_conditioning=unconditional_conditioning,
@@ -256,7 +258,7 @@ class DDIMSampler(object):
                       x_T=None, ddim_use_original_steps=False,
                       callback=None, timesteps=None, quantize_denoised=False,
                       mask=None, x0=None, img_callback=None, log_every_t=100,
-                      temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
+                      temperature=1., noise_dropout=0., score_corrector=None,flow=None, corrector_kwargs=None,
                       unconditional_guidance_scale=1., unconditional_conditioning=None,src_im=None,**kwargs):
         device = self.model.betas.device
         
@@ -286,16 +288,30 @@ class DDIMSampler(object):
         # switch off pnp injection
         register_spa_attn_injection(self, 1,switch_on=False,input_blocks=True,middle_block=True, output_blocks=True,attn_component="attn1", chunks=3)
         #pnp feature transfer    
-        
+        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,6,7,8],fusion="fft")
         # register_conv_injection(self, 1) 
-        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[6,7],fusion="temporal")
-        register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2,3,4,5,8],fusion="replace")
+        # register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[6,7],fusion="temporal")
+        # register_spa_attn_injection(self, 1,switch_on=True,input_blocks=True,middle_block=False, output_blocks=False,attn_component="attn1",flow=flow, chunks=3,block_indices=[0,1,2,3],fusion="flow_fix")
+        
+        # register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1",flow=flow, chunks=3,block_indices=[0,1,2,3,4,5,6,7,8],fusion="fft")
+        
         # register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1", chunks=3,block_indices=[0,1,2],fusion="fft")
         
         for i, step in enumerate(iterator):
-            # if i<15:
-            #     continue
+            if i%10==0:
+                print(i)
+                pass
+            if i==49:
+                print(i)
+                pass
             
+            if i<10:
+                register_spa_attn_injection(self, 1,switch_on=False,input_blocks=True,middle_block=True, output_blocks=True,attn_component="attn1",flow=flow, chunks=3,block_indices=[0,1,2,3,4,5,6,7,8],fusion="flow_fix")
+                # register_spa_attn_injection(self, 1,switch_on=True,input_blocks=False,middle_block=False, output_blocks=True,attn_component="attn1",flow=flow, chunks=3,block_indices=[8],fusion="flow_fix")
+                register_spa_attn_injection(self, 1,switch_on=True,input_blocks=True,middle_block=False, output_blocks=False,attn_component="attn1",flow=flow, chunks=3,block_indices=[0,1,2,3,4,5,6,7,8],fusion="flow_fix")
+            else:
+                register_spa_attn_injection(self, 1,switch_on=False,input_blocks=True,middle_block=False, output_blocks=True,attn_component="attn1",flow=flow, chunks=3,block_indices=[0,1,2,3,4,5,6,7,8],fusion="flow_fix")    
+                register_spa_attn_injection(self, 1,switch_on=True,input_blocks=True,middle_block=True, output_blocks=True,attn_component="attn1",flow=flow, chunks=3,block_indices=[0,1,2,3,4,5,6,7,8],fusion="fft")
             # if i==total_steps//2:
                 # register_spa_attn_injection(self, 1,switch_on=False,input_blocks=False,output_blocks=True,attn_component="attn1")
                 # register_spa_attn_injection(self, 1,switch_on=True,input_blocks=True,output_blocks=False,attn_component="attn1")
@@ -322,7 +338,7 @@ class DDIMSampler(object):
                                         quantize_denoised=quantize_denoised, temperature=temperature,
                                         noise_dropout=noise_dropout, score_corrector=score_corrector,
                                         corrector_kwargs=corrector_kwargs,
-                                        unconditional_guidance_scale=unconditional_guidance_scale,
+                                        unconditional_guidance_scale=unconditional_guidance_scale,flow=flow,
                                         unconditional_conditioning=unconditional_conditioning,src_im=src_im,**kwargs)
             else:
                 outs = self.p_sample_ddim(img, cond, ts,
@@ -612,7 +628,7 @@ class DDIMSampler(object):
     def p_sample_ddim_with_inverse(self, x, c, t, index, target_conditioning=None,
                       inverse_results_dir=None,repeat_noise=False,src_start=None, use_original_steps=False, quantize_denoised=False,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
-                      unconditional_guidance_scale=1., unconditional_conditioning=None,**kwargs):
+                      unconditional_guidance_scale=1.,flow=None, unconditional_conditioning=None,**kwargs):
         b, *_, device = *x.shape, x.device
         
         ddim_inv_t = load_ddim_latents_at_t(t[0].item(), inverse_results_dir).to(x.device)
@@ -696,16 +712,24 @@ class DDIMSampler(object):
             noise_recon = torch.nn.functional.dropout(noise_recon, p=noise_dropout)
         x_prev_recon = a_prev.sqrt() * pred_x0_recon + dir_xt_recon + noise_recon
         
-        # if t[0].item()<5:
+        # if t[0].item()>130 and t[0].item()<150:
         #     print(t)
-        #     x_prev = batch_flow_align(
-        #         x_prev=x_prev,
-        #         x_prev_recon=x_prev_recon,
-        #         decode_fn=self.model.decode_first_stage,# or appropriate decoder
-        #         encode_fn= self.model.encode_first_stage,
-        #         first_stage_fn=self.model.get_first_stage_encoding,
-        #         alpha=0.0  # control temporal smoothing
-        #     )
+            
+        #     # x_prev= align_by_flow(x_prev=x_prev,flow=flow,alpha=0.5)
+        #     x_prev= align_by_flow_high_res(x_prev=x_prev,flow=flow,decode_fn=self.model.decode_first_stage,
+        #                                   encode_fn= self.model.encode_first_stage,
+        #                                   first_stage_fn=self.model.get_first_stage_encoding,
+        #                                   alpha=0.5)
+            
+            
+            # x_prev = batch_flow_align(
+            #     x_prev=x_prev,
+            #     x_prev_recon=x_prev_recon,
+            #     decode_fn=self.model.decode_first_stage,# or appropriate decoder
+            #     encode_fn= self.model.encode_first_stage,
+            #     first_stage_fn=self.model.get_first_stage_encoding,
+            #     alpha=0.0  # control temporal smoothing
+            # )
             
             # x_prev = batch_flow_align_latent(
             #     x_prev=x_prev,

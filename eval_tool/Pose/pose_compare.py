@@ -315,6 +315,7 @@ def compute_features_wrapp(path, model, batch_size, dims, device,
         numbers =[[int(par) for par in part if par.isdigit()] for part in parts]
         
         numbers= [ num[-1] for num in numbers if len(num)>0]
+        # breakpoint()
         mi_num= min(numbers)
         # breakpoint()
         # if numbers[0]>28000: # CelebA-HQ Test my split #check 28000-29000: target 29000-30000: source
@@ -402,7 +403,8 @@ def main():
     Pose_values= []
     for i in range(len(list_videos)):
         target_path= os.path.join(args.path[0],list_videos[i])
-        coordinate_path= os.path.join(args.crop_coordinates,list_videos[i],"vid_inv_transforms.npy")
+        vid_name=list_videos[i]
+        coordinate_path= os.path.join(args.crop_coordinates,list_videos[i],vid_name+"_inv_transforms.npy")
         
         Results_path= os.path.join(args.path[1],list_videos[i])
         if args.subfolders is not None or args.subfolders != '':

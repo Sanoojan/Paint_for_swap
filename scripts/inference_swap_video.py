@@ -1,7 +1,7 @@
 import argparse, os, sys, glob
 
 #set cuda device 
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 import cv2
 import torch
 import numpy as np
@@ -38,6 +38,8 @@ from ldm.data.video_swap_dataset import VideoDataset
 # import clip
 from torchvision.transforms import Resize
 import torchvision.transforms.functional as TF 
+import torchvision.transforms as transforms
+import torch.nn.functional as F
 
 from PIL import Image
 from torchvision.transforms import PILToTensor
@@ -225,14 +227,14 @@ def main():
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="results_video_new_REFace_analysis/New_Temporal_analysis_smith/pnp_temporal_averagingw5_67"
+        default="results_video_new_REFace_analysis_flow2/New_Temporal_analysis_smith_flow/pnp_with_fft_flow_at_attn_out_10steps_0.5_check2"
     )
     parser.add_argument(
         "--Base_dir",
         type=str,
         nargs="?",
         help="dir to write cropped_images",
-        default="results_video_new_REFace_analysis"
+        default="results_video_new_REFace_analysis_flow2"
     )
     parser.add_argument(
         "--skip_grid",
@@ -324,13 +326,13 @@ def main():
         "--n_samples",
         type=int,
         default=6,
-        help="how many samples to produce for each given prompt. A.k.a. batch size",
+        help="how many samples to produce. A.k.a. batch size",
     )
     parser.add_argument(
         "--n_frames",
         type=int,
         default=18,
-        help="how many samples to produce for each given prompt. A.k.a. batch size",
+        help="how many samples to produce for a video. A.k.a video length",
     )
     parser.add_argument(
         "--n_rows",
@@ -798,8 +800,17 @@ def main():
                             x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
                             
                             
+                            start_code = x_noisy_target
+                            video1=test_batch.clone()
+                            # resize to 64,64
+                            video1 = F.interpolate(video1, size=(opt.H // opt.f, opt.W // opt.f), mode='bilinear', align_corners=False)
+                            flow= return_flow(video1)
                             
-                            start_code=x_noisy_target
+
+                            
+                            # start_code=warp_from_video(start_code,video1, alpha=0.5)
+                            
+                            # start_code=x_noisy_target
                             # start_code=start_code[0].repeat(opt.n_samples,1,1,1) # b,64,64,4
                             
                             # fft fusion
@@ -815,13 +826,17 @@ def main():
                             #         first_stage_fn=model.get_first_stage_encoding,
                             #         alpha=0.9  # control temporal smoothing
                             #     )
+                            
+                            
+                            
+                            
                             # warping the latents by target video
                             
                             
                             
                             # load  as start_code
                             
-                            # start_code_all=torch.from_numpy(np.load("results_video_new_REFace_analysis/Temporal_analysis/noises.npy")).to(device)
+                            # start_code_all=torch.from_numpy(np.load("/home/sanoojan/Go-with-the-Flow/noise_warp_output_folder4/noises.npy")).to(device)
                             # start_code=start_code_all[0:opt.n_samples] # b,64,64,4
                             # start_code=start_code.to(device)
                             # start_code=start_code.permute(0,3,1,2)
@@ -868,6 +883,7 @@ def main():
                                                         unconditional_guidance_scale=opt.scale,
                                                         unconditional_conditioning=uc,
                                                         eta=opt.ddim_eta,
+                                                        flow=flow,
                                                         x_T=start_code,
                                                         test_model_kwargs=test_model_kwargs,src_im=ref_imgs.squeeze(1).to(torch.float32),tar=test_batch.to("cuda"))
                     # breakpoint()
@@ -905,13 +921,27 @@ def main():
                             img = Image.fromarray(x_sample.astype(np.uint8)).resize((1024,1024), Image.BILINEAR)
                             img.save(os.path.join(model_out_path, segment_id_batch[i]+".png"))
                             
-                            orig_image=Image.open(os.path.join(target_frames_path, str(int(segment_id_batch[i]))+".png"))
+                            orig_image=Image.open(os.path.join(target_frames_path, str(int(segment_id_batch[i]))+".png")).convert('RGB')
+                            
+                            # To get the consistent output for background just encode and decode
+                            image_tensor = get_tensor()(orig_image)
+                            image_tensor_resize=transforms.Resize([opt.H, opt.W])(image_tensor)
+                            image_tensor_resize=image_tensor_resize.to(device)
+                            image_tensor_resize = image_tensor_resize.unsqueeze(0)
+                            encoder_posterior = model.encode_first_stage(image_tensor_resize)
+                            z = model.get_first_stage_encoding(encoder_posterior)
+                            image_tensor_resize=model.decode_first_stage(z)
+                            image_tensor_resize = torch.clamp((image_tensor_resize + 1.0) / 2.0, min=0.0, max=1.0)
+                            image_tensor_resize = image_tensor_resize.cpu().permute(0, 2, 3, 1).numpy()
+                            image_tensor_resize = Image.fromarray((255. * image_tensor_resize[0]).astype(np.uint8)).convert('RGB')
+                            image_conv = image_tensor_resize.resize((image_tensor.shape[1], image_tensor.shape[2]), Image.BILINEAR)
+
                             inv_transforms=inv_transforms_all[int(segment_id_batch[i])]
                             #resize to video shape
                             if opt.only_target_crop:                
                                 inv_trans_coeffs = inv_transforms
                                 swapped_and_pasted = img.convert('RGBA')
-                                pasted_image = orig_image.convert('RGBA')
+                                pasted_image = image_conv.convert('RGBA')
                                 swapped_and_pasted.putalpha(255)
                                 projected = swapped_and_pasted.transform(orig_image.size, Image.PERSPECTIVE, inv_trans_coeffs, Image.BILINEAR)
                                 pasted_image.alpha_composite(projected)
@@ -968,6 +998,7 @@ def main():
     # else:
         # breakpoint()
     clips.write_videofile(out_video_filepath,fps=fps, codec='libx264', audio_codec='aac', ffmpeg_params=['-pix_fmt:v', 'yuv420p', '-colorspace:v', 'bt709', '-color_primaries:v', 'bt709','-color_trc:v', 'bt709', '-color_range:v', 'tv', '-movflags', '+faststart'],logger=proglog.TqdmProgressBarLogger(print_messages=False))
+    clips.write_gif(os.path.join(outpath, name.replace('.mp4', '.gif')), fps=fps, logger=proglog.TqdmProgressBarLogger(print_messages=False))
         # except Exception as e:
         #     print("\nERROR! Failed to export video")
         #     print('\n', e)

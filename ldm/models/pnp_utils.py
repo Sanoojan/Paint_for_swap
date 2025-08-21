@@ -20,7 +20,7 @@ from ldm.modules.attention import exists, default
 from einops import rearrange, repeat
 from torch import nn, einsum
 from scripts.face_swap_utils import *
-
+from scripts.temporal_flow import *
 
 # PNP injection functions
 # Modified from ResnetBlock2D.forward
@@ -54,7 +54,7 @@ def register_time(model, t):
 
 
 
-def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_blocks=False,output_blocks=True,middle_block=False,attn_component='attn1',chunks=3,block_indices=None, fusion="replace"):
+def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_blocks=False,output_blocks=True,middle_block=False,attn_component='attn1',chunks=3,flow=None,block_indices=None, fusion="replace"):
     
     def temporal_attention(x, window_size=5, sigma=1.0):
         """
@@ -174,12 +174,60 @@ def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_b
                         # q[2*chunk_size:]=q[:chunk_size]
                         # k[2*chunk_size:]=k[:chunk_size]
                         
-                        
+                        # breakpoint()
                         q[chunk_size:2*chunk_size]=combine_fft_high_low(q[:chunk_size],q[chunk_size:2*chunk_size],split_ratio=0.8)
                         k[chunk_size:2*chunk_size]=combine_fft_high_low(k[:chunk_size],k[chunk_size:2*chunk_size],split_ratio=0.8)
                         
                         q[2*chunk_size:]=combine_fft_high_low(q[:chunk_size],q[2*chunk_size:],split_ratio=0.8)
                         k[2*chunk_size:]=combine_fft_high_low(k[:chunk_size],k[2*chunk_size:],split_ratio=0.8)
+                        
+                    elif fusion == "flow_fix":
+                        # print(q.shape)
+                        # q[chunk_size:2*chunk_size]=q[:chunk_size]
+                        # k[chunk_size:2*chunk_size]=k[:chunk_size]
+                        # # v[chunk_size:2*chunk_size]=v[:chunk_size]
+                        
+                        # q[2*chunk_size:]=q[:chunk_size]
+                        # k[2*chunk_size:]=k[:chunk_size]
+                        
+                        if flow is not None and q.shape[1]==4096:
+                            
+                            q[chunk_size:2*chunk_size]=combine_fft_high_low(q[:chunk_size],q[chunk_size:2*chunk_size],split_ratio=0.8)
+                            k[chunk_size:2*chunk_size]=combine_fft_high_low(k[:chunk_size],k[chunk_size:2*chunk_size],split_ratio=0.8)
+                            
+                            q[2*chunk_size:]=combine_fft_high_low(q[:chunk_size],q[2*chunk_size:],split_ratio=0.8)
+                            k[2*chunk_size:]=combine_fft_high_low(k[:chunk_size],k[2*chunk_size:],split_ratio=0.8)
+                            
+                            
+                            # B,H,w=q.shape
+                            q_flow=q[chunk_size:2*chunk_size]
+                            k_flow=k[chunk_size:2*chunk_size]
+                            q_flow=q_flow.reshape(chunk_size,64,64,-1)
+                            k_flow=k_flow.reshape(chunk_size,64,64,-1)
+                            q_flow=q_flow.permute(0,3,1,2) # b,c,h,w
+                            k_flow=k_flow.permute(0,3,1,2) # b,c,h,w
+                            q_flow=align_by_flow(q_flow,flow=flow,alpha=0.8)
+                            k_flow=align_by_flow(k_flow,flow=flow,alpha=0.8)
+                            q_flow=q_flow.permute(0,2,3,1).reshape(-1,64*64,q_flow.shape[1]) # b,n,c
+                            k_flow=k_flow.permute(0,2,3,1).reshape(-1,64*64,k_flow.shape[1]) # b,n,c
+                            q[chunk_size:2*chunk_size]=q_flow
+                            k[chunk_size:2*chunk_size]=k_flow
+                            # q[2*chunk_size:]=q_flow
+                            # k[2*chunk_size:]=k_flow
+                            print('pnp feature transfering by flow')
+                        else:
+                            
+                            q[chunk_size:2*chunk_size]=combine_fft_high_low(q[:chunk_size],q[chunk_size:2*chunk_size],split_ratio=0.8)
+                            k[chunk_size:2*chunk_size]=combine_fft_high_low(k[:chunk_size],k[chunk_size:2*chunk_size],split_ratio=0.8)
+                            
+                            q[2*chunk_size:]=combine_fft_high_low(q[:chunk_size],q[2*chunk_size:],split_ratio=0.8)
+                            k[2*chunk_size:]=combine_fft_high_low(k[:chunk_size],k[2*chunk_size:],split_ratio=0.8)
+                            
+                        
+                        
+                        
+                        
+                        
                     
                     elif fusion == "fft_vfixed":
                         # print(q.shape)
@@ -214,9 +262,10 @@ def register_spa_attn_injection(model, injection_schedule,switch_on=True,input_b
             
                     
             q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
-
+            # print("q.shape",q.shape)
 
             sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
+            # print("sim.shape",sim.shape)
 
             if exists(mask):
                 mask = rearrange(mask, 'b ... -> b (...)')

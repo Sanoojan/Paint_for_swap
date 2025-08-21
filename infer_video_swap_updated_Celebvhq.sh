@@ -2,16 +2,15 @@
 ##### EXPERIMENTAL #####
 
 Base_dir="outputs/CelebVHQ_test_full"
-Experiment_name="1_REFace"
+Experiment_name="22_BGC_PnP_with_fft_feature_injection_all_with_op_flo_at_attn_trans_with_10_0.5"
 device=2
 
 CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project_ffhq.yaml"
-DATA_CONFIG="dataset/FaceData/Data/VFHQ-Test/data_matching.yaml"
 CKPT="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt"
 # CKPT="models/Paint-by-Example/V5_without_FSA_154/checkpoints/epoch=000019.ckpt"
 
 video_base_dir="dataset/FaceData/Data/test_videos"
-image_dir="/home/sanoojan/Paint_for_swap/dataset/FaceData/Data/VFHQ-Test/Celeb_Source"
+image_dir="/home/sanoojan/Paint_for_swap/dataset/FaceData/Data/VFHQ-Test/Celeb_Source_100"
 DATA_CONFIG="${Base_dir}/${Experiment_name}/results_new/data_matching.yaml"
 
 if [ ! -d "${Base_dir}/${Experiment_name}/results_new" ]; then

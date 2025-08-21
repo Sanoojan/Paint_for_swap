@@ -2,6 +2,189 @@ import torch
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import torch.nn.functional as F
+import os 
+import numpy as np
+from PIL import Image
+
+
+def save_fft_magnitude_plot(
+    fft_q: torch.Tensor,
+    batch_idx: int = 0,
+    channel_idx: int = 0,
+    filename: str = "fft_magnitude.png",
+    output_dir: str = "./fft_vis",
+    use_log: bool = False
+):
+    """
+    Save the FFT magnitude spectrum of a specific batch and channel as an image.
+
+    Args:
+        fft_q (Tensor): Complex-valued FFT tensor of shape (B, C, D)
+        batch_idx (int): Batch index to visualize
+        channel_idx (int): Channel index to visualize
+        filename (str): Output filename
+        output_dir (str): Directory to save the plot
+        use_log (bool): Whether to use log magnitude for better visualization
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    fft_selected = fft_q[batch_idx, channel_idx, :].detach().cpu()
+
+    # Compute magnitude
+    magnitude = torch.abs(fft_selected).numpy()
+    if use_log:
+        magnitude = np.log1p(magnitude)  # log(1 + |x|)
+
+    # Optional: center zero-frequency (if needed)
+    magnitude = np.fft.fftshift(magnitude)
+
+    # Plot and save
+    plt.figure(figsize=(8, 3))
+    plt.plot(magnitude, label='|FFT|')
+    plt.title(f"FFT Magnitude - Batch {batch_idx}, Channel {channel_idx}")
+    plt.xlabel("Frequency Bin")
+    plt.ylabel("Magnitude (log)" if use_log else "Magnitude")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.legend()
+
+    save_path = os.path.join(output_dir, filename)
+    plt.savefig(save_path)
+    plt.close()
+    print(f"Saved FFT magnitude plot to: {save_path}")
+
+def save_first5_attention_maps(
+    combined: torch.Tensor,
+    batch_idx: int = 0,
+    filename: str = "combined_attention_5ch.png",
+    output_dir: str = "./attn_vis"
+):
+    """
+    Save the first 5 attention channels (reshaped to 64x64) as a horizontal grid.
+
+    Args:
+        combined (torch.Tensor): Tensor of shape (B, 4096, C)
+        batch_idx (int): Which batch index to visualize
+        filename (str): Name of the output image
+        output_dir (str): Directory to save image
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    att = combined[batch_idx].detach().cpu().numpy()  # (4096, 320)
+    tokens, channels = att.shape
+    h, w = 64, 64
+
+    if tokens != h * w:
+        raise ValueError(f"Cannot reshape {tokens} tokens to {h}x{w}")
+
+    num_channels_to_plot = min(5, channels)
+
+    # Transpose to (C, H*W) -> (C, H, W)
+    att = att.T[:num_channels_to_plot].reshape(num_channels_to_plot, h, w)
+
+    # Normalize each channel to [0, 255]
+    att_norm = (att - att.min(axis=(1, 2), keepdims=True)) / \
+               (att.max(axis=(1, 2), keepdims=True) - att.min(axis=(1, 2), keepdims=True) + 1e-8)
+    att_uint8 = (att_norm * 255).astype(np.uint8)
+
+    # Stack horizontally: (H, num_channels * W)
+    grid_img = np.hstack(att_uint8)
+
+    # Save
+    out_path = os.path.join(output_dir, filename)
+    Image.fromarray(grid_img).save(out_path)
+    print(f"Saved first 5 channel attention grid to {out_path}")
+
+def save_combined_attention(
+    combined: torch.Tensor,
+    batch_idx: int = 0,
+    filename: str = "combined_attention.png",
+    output_dir: str = "./attn_vis"
+):
+    """
+    Save the attention tensor (B, 4096, C) as a grid of (64x64) grayscale images, one per channel.
+
+    Args:
+        combined (torch.Tensor): Tensor of shape (B, 4096, C)
+        batch_idx (int): Which batch index to use
+        filename (str): Name of the output image
+        output_dir (str): Directory to save image
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    att = combined[batch_idx].detach().cpu().numpy()  # Shape: (4096, 320)
+    h, w = 64, 64
+    tokens, channels = att.shape
+
+    if tokens != h * w:
+        raise ValueError(f"Cannot reshape {tokens} tokens to {h}x{w}. Please adjust.")
+
+    # Transpose to (C, H*W) → (C, H, W)
+    att = att.T.reshape(channels, h, w)
+
+    # Normalize each channel separately to [0, 255]
+    att_norm = (att - att.min(axis=(1, 2), keepdims=True)) / \
+               (att.max(axis=(1, 2), keepdims=True) - att.min(axis=(1, 2), keepdims=True) + 1e-8)
+    att_uint8 = (att_norm * 255).astype(np.uint8)
+
+    # Arrange into a grid: auto-calculate grid size
+    grid_rows = int(np.floor(np.sqrt(channels)))
+    grid_cols = int(np.ceil(channels / grid_rows))
+    grid_img = np.zeros((grid_rows * h, grid_cols * w), dtype=np.uint8)
+
+    for i in range(channels):
+        r = i // grid_cols
+        c = i % grid_cols
+        grid_img[r*h:(r+1)*h, c*w:(c+1)*w] = att_uint8[i]
+
+    # Save image
+    out_path = os.path.join(output_dir, filename)
+    Image.fromarray(grid_img).save(out_path)
+    print(f"Saved attention visualization to {out_path}")
+
+def save_combined_attention(
+    combined: torch.Tensor,
+    batch_idx: int = 0,
+    channel_idx: int = 0,
+    filename: str = "combined_attention.png",
+    reshape_to_square: bool = True,
+    output_dir: str = "./attn_vis"
+):
+    """
+    Save the combined attention map as an image.
+
+    Args:
+        combined (torch.Tensor): Tensor of shape (b, c, d)
+        batch_idx (int): Which batch index to visualize
+        channel_idx (int): Which channel index to visualize
+        filename (str): Output filename
+        reshape_to_square (bool): If True, reshape d to sqrt(d) × sqrt(d) if possible
+        output_dir (str): Folder to save the image
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    att = combined[batch_idx, channel_idx, :].detach().cpu().numpy()
+
+    if reshape_to_square:
+        d = att.shape[0]
+        side = int(np.sqrt(d))
+        if side * side == d:
+            att = att.reshape((side, side))
+        else:
+            raise ValueError(f"Cannot reshape dimension {d} to a square. Set reshape_to_square=False to save as 1D.")
+
+    # Normalize to 0–255
+    att = (att - att.min()) / (att.max() - att.min() + 1e-8)  # normalize to [0, 1]
+    att_img = (att * 255).astype(np.uint8)
+
+    # Save
+    image = Image.fromarray(att_img)
+    if att_img.ndim == 2:
+        image = image.convert("L")  # grayscale
+    elif att_img.ndim == 3:
+        image = image.convert("RGB")
+
+    save_path = os.path.join(output_dir, filename)
+    image.save(save_path)
+    print(f"Saved attention image to {save_path}")
 
 def mix_source_and_target(target,source, alpha=0.5):
     """
@@ -252,6 +435,10 @@ def combine_fft_high_low(q1, q2, split_ratio=0.5):
         Tensor of shape (b, c, d) with combined frequency components.
         
     """
+    
+    if q1.shape[1]==4096:
+        print("")
+    
     
     q1 = q1.float()  # Ensure q1 is float
     q2 = q2.float()  # Ensure q2 is float

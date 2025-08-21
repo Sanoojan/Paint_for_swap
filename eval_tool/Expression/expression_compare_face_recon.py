@@ -447,7 +447,8 @@ def main():
     Expression_values= []
     for i in range(len(list_videos)):
         target_path= os.path.join(args.path[0],list_videos[i])
-        coordinate_path= os.path.join(args.crop_coordinates,list_videos[i],"vid_inv_transforms.npy")
+        vid_name= list_videos[i]
+        coordinate_path= os.path.join(args.crop_coordinates,list_videos[i],vid_name+"_inv_transforms.npy")
         Results_path= os.path.join(args.path[1],list_videos[i])
         if args.subfolders is not None or args.subfolders != '':
             Results_path= os.path.join(Results_path,args.subfolders)

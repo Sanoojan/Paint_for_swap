@@ -1,4 +1,4 @@
-    device=1
+    device=5
     current_time=$(date +"%Y%m%d_%H%M%S")
     Write_results="Video_Quantitative2"
     
@@ -31,9 +31,15 @@
     Results_out="outputs/VFHQ_test_full/19_PnP_with_fft_feature_injection/results_new"
     Results_out="outputs/VFHQ_test_full/6_PnP_on_REFace/results_new"
     Results_out="outputs/VFHQ_test_full/14_PnP_with_feature_injection_154_fft_3_1/results_new"
-    Results_out="outputs/VFHQ_test_full/19_PnP_with_fft_feature_injection3_8_replace_0_2/results_new"
+    Results_out="outputs/VFHQ_test_full/20_PnP_with_fft_feature_injection_all_with_op_flo_img_141/results_new"
+    Results_out="outputs/VFHQ_test_full/22_BGC_PnP_with_fft_feature_injection_all_with_op_flo_at_attn_trans_with_10_0.5/results_new"
+    # Results_out="outputs/VFHQ_test_full/1_Vanilla_REFAce/results_new"
+    # Results_out="/home/sanoojan/Video_diffusion/AnyV2V/Results_full/Prompt-Based-Editing/i2vgen-xl/REFace1_new1"
+    Results_out="/home/sanoojan/Go-with-the-Flow/results"
+    
     # Video_results_out="outputs/VFHQ_test_full/1_REFace/results_new"
-    Video_results_out="outputs/VFHQ_test_full/19_PnP_with_fft_feature_injection3_8_replace_0_2/results_new"
+
+    Video_results_out="/home/sanoojan/Go-with-the-Flow/results"
     results_subfolder="results"
 
     #########################################################################################
@@ -50,7 +56,7 @@
         --generated_videos_path "${Results_out}" \
         --generated_subfolder "${results_subfolder}" \
         --number_of_videos -1 \
-        --video_length 16 \
+        --video_length 24 \
         --video_names_details ${target_lables} \
         --only_final >> "$output_filename"
 
@@ -64,9 +70,9 @@
         "${target_path}" \
         "${Results_out}" \
         --vidfolders -1 \
-        --batch-size 16 \
+        --batch-size 24 \
         --video_names_details $target_lables \
-        --num_imgs 16 \
+        --num_imgs 24 \
         --crop_coordinates "${crop_coordinates}" \
         --subfolders "${results_subfolder}" >> "$output_filename"
 
@@ -77,8 +83,8 @@
         "${target_path}" \
         "${Results_out}" \
         --vidfolders -1 \
-        --batch-size 16 \
-        --num_imgs 16 \
+        --batch-size 24 \
+        --num_imgs 24 \
         --video_names_details $target_lables \
         --crop_coordinates "${crop_coordinates}" \
         --subfolders "${results_subfolder}" >> "$output_filename" 
@@ -95,7 +101,7 @@
         --target_label_path $target_lables \
         --target_subfolder "vidmask_frames" \
         --arcface True \
-        --number_of_images 16 \
+        --number_of_images 24 \
         --crop_coordinates "${crop_coordinates}" \
         --results_subfolder "${results_subfolder}"  >> "$output_filename" 
         

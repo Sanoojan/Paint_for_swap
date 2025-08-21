@@ -446,7 +446,7 @@ ours_5_path="results_FINALS/v5_Two_CLIP_proj_154_ep_3.5_5/results"
 src_path="dataset/FaceData/CelebAMask-HQ/Val"
 target_path="dataset/FaceData/CelebAMask-HQ/Val_target"
 save_path="Aligned/Aligne_CelebA_demo_eff.png"
-# select_images=[3,7,25,31,32,64,69,81,82,88,102]
+# select_images=[ 3,7,25,31,32,64,69,81,82,88,102]
 # select_images=[7,25,32,64,81,82,88,102]
 # select_images=[7,25,541,64,81,82,556,570]
 # select_images=[25,541,64,81,570]   # crop half 
@@ -521,7 +521,7 @@ def visualize_images(images, save_path):
 
 
 images = read_images(path_list, select_images)
-visualize_images(images,save_path)
+# visualize_images(images,save_path)
 
 
 
@@ -533,7 +533,7 @@ HifiFace_path="/home/sanoojan/other_swappers/hififace/FFHQ_results"
 FaceDancer_path="/home/sanoojan/other_swappers/FaceDancer/FaceDancer_c_HQ-FFHQ/results"
 # ours_path="results_grad/v4_reconstruct_img_train_2_step_multi_false_with_LPIPS_ep16_with_src_hair/results"
 ours_path="results_FFHQ_FINAL/v5_Two_CLIP_proj_with_multiple_ID_losses_ep_17_3_75/results"
-save_path="Aligned/Aligne_FFHQ_demo.png"
+save_path="Aligned/Aligne_FFHQ_new.png"
 
 src_path="dataset/FaceData/FFHQ/Val"
 target_path="dataset/FaceData/FFHQ/Val_target"
@@ -558,7 +558,7 @@ path_list=[src_path,target_path,FaceDancer_path,e4s_path,DiffFace_path,Diffswap_
 Labels=["Source","Target","FaceDancer","E4S","DiffFace","DiffSwap","Ours"]
 
 # images = read_images(path_list, select_images)
-# visualize_images(images,save_path)
+visualize_images(images,save_path)
 
 
 

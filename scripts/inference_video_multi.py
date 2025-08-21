@@ -473,7 +473,7 @@ def run_inference(model, sampler, opt, device, config):
                     inverse_cond=None
                     
                     if opt.Start_from_target:
-                        print("Starting from target....")
+                        print(" from target....")
                         x=test_batch
                         x=x.to(device)
                         encoder_posterior = model.encode_first_stage(x)
@@ -548,8 +548,9 @@ def run_inference(model, sampler, opt, device, config):
                             start_code=x_noisy.to(x.device)
                             # start_code=start_code1
                             video1=test_batch.clone()
-                            # resize to 64,64
                             video1 = F.interpolate(video1, size=(opt.H // opt.f, opt.W // opt.f), mode='bilinear', align_corners=False)
+                            # resize to 64,64
+                            # video1 = F.interpolate(video1, size=(opt.H // opt.f, opt.W // opt.f), mode='bilinear', align_corners=False)
                             flow= return_flow(video1)
                             
                             # start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=1.0,beta=0.8,normalized=True)
@@ -875,6 +876,7 @@ def main():
 
     parser.add_argument('--save_vis', action='store_true')
     parser.add_argument('--seg12',default=True, action='store_true')
+    parser.add_argument('--source_images_dir', type=str, default='data/source_images', help='directory containing source images for inference')
     
     opt = parser.parse_args()
 
@@ -892,37 +894,43 @@ def main():
         sampler = DDIMSampler(model)
 
     # Load YAML file
-    with open(opt.data_config, "r") as f:
-        pairs = yaml.safe_load(f)
+    # with open(opt.data_config, "r") as f:
+    #     pairs = yaml.safe_load(f)
 
     ori_base_dir = opt.Base_dir
-    for video_dir, source_img in pairs.items():
-        try:
-            full_dir = os.path.join(opt.video_base_dir, video_dir)
-            video_files = glob(os.path.join(full_dir, "*.mp4"))
-            video_file = video_files[0] if video_files else None
-            if video_file is not None:
-                opt.target_video = video_file
-                opt.outdir = os.path.join(opt.output_base_dir, video_dir)
-                # if exists
-                if os.path.exists(opt.outdir):
-                    print(f"Output directory {opt.outdir} already exists. Skipping...")
-                    continue
-                opt.src_image = os.path.join(opt.image_dir, source_img)
-                opt.Base_dir = os.path.join(ori_base_dir, video_dir)
+    all_source_images = os.listdir(opt.source_images_dir)
+    video_dirs=os.listdir(opt.video_base_dir)
+    
+    
+    for source_img in all_source_images:
+        for video_dir in video_dirs:
+            try:
+                full_dir = os.path.join(opt.video_base_dir, video_dir)
+                video_files = glob(os.path.join(full_dir, "*.mp4"))
+                video_file = video_files[0] if video_files else None
+                if video_file is not None:
+                    opt.target_video = video_file
+                    source_name= os.path.basename(source_img)
+                    opt.outdir = os.path.join(opt.output_base_dir, video_dir,source_name)
+                    # if exists
+                    if os.path.exists(opt.outdir):
+                        print(f"Output directory {opt.outdir} already exists. Skipping...")
+                        continue
+                    opt.src_image = os.path.join(opt.image_dir, source_img)
+                    opt.Base_dir = os.path.join(ori_base_dir, video_dir)
 
-                run_inference(
-                    model,
-                    sampler,
-                    opt,
-                    device,
-                    config,
-                )
-        
-            else:
-                print(f"Video file not found in {full_dir}")
-        except Exception as e:
-            print(f"Error processing {video_dir}: {e}")
+                    run_inference(
+                        model,
+                        sampler,
+                        opt,
+                        device,
+                        config,
+                    )
+            
+                else:
+                    print(f"Video file not found in {full_dir}")
+            except Exception as e:
+                print(f"Error processing {video_dir}: {e}")
 
 
 if __name__ == "__main__":

@@ -79,6 +79,20 @@ def un_norm_clip(x1):
 def un_norm(x):
     return (x+1.0)/2.0
 
+def norm_clip(x):
+    x = x*1.0 # to avoid changing the original tensor or clone() can be used
+    reduce=False
+    if len(x.shape)==3:
+        x = x.unsqueeze(0)
+        reduce=True
+    x[:,0,:,:] = (x[:,0,:,:] - 0.48145466) / 0.26862954
+    x[:,1,:,:] = (x[:,1,:,:] - 0.4578275) / 0.26130258
+    x[:,2,:,:] = (x[:,2,:,:] - 0.40821073) / 0.27577711
+    
+    if reduce:
+        x = x.squeeze(0)
+    return x
+
 def save_clip_img(img, path,clip=True):
     if clip:
         img=un_norm_clip(img)
@@ -121,14 +135,21 @@ def batch_flow_align(x_prev, x_prev_recon, decode_fn,encode_fn,first_stage_fn, a
 
         # Flow from frame1 → frame2
         flow = compute_flow(frame2, frame1, model)  # (1, 2, H, W)
-
+        
         # Warp x_prev[i] to match x_prev[i+1]
         warped_rgb = warp_image(rgb_prev[i].unsqueeze(0), flow)
         aligned = alpha * rgb_prev[i + 1] + (1 - alpha) * warped_rgb.squeeze(0)
+        
         rgb_prev[i + 1] = aligned
         aligned_latent = encode_latents(aligned.unsqueeze(0), encode_fn, first_stage_fn)
         aligned_x_prev[i + 1] = aligned_latent.squeeze(0)
         
+        save_clip_img(frame1[0],"Debug/flow/fr1.png")
+        save_clip_img(frame2[0],"Debug/flow/fr2.png")
+        save_clip_img(warped_rgb[0], "Debug/flow/warped.png")
+        save_clip_img(rgb_prev[i], "Debug/flow/rgb_prev1.png")
+        save_clip_img(rgb_prev[i + 1], "Debug/flow/rgb_prev2.png")
+        save_flow_img(flow, "Debug/flow/flow.png")
         # warped = warp_image(x_prev[i].unsqueeze(0), flow)  # (1, 4, H, W)
 
         # # Blend with current sample
@@ -138,6 +159,119 @@ def batch_flow_align(x_prev, x_prev_recon, decode_fn,encode_fn,first_stage_fn, a
     
 
     return aligned_x_prev
+
+@torch.no_grad()
+def return_flow(video):
+    """
+    video:    (B, 3, H, W) - video frames
+    """
+    B = video.shape[0]
+    flows=[]
+    for i in range(B - 1):
+        # Get RGB frames
+        frame1 = video[i].unsqueeze(0)
+        frame2 = video[i + 1].unsqueeze(0)
+        
+        # frame1= un_norm(frame1)
+        # frame2= un_norm(frame2)
+        # # normalize to clip
+        # frame1= norm_clip(frame1)
+        # frame2= norm_clip(frame2)
+        
+        frame1=frame1.to(device)
+        frame2=frame2.to(device)
+        flow = compute_flow(frame2, frame1, model) 
+        # Save flow image
+        save_flow_img(flow, f"Debug/flow/flow_{i}.png")
+        flows.append(flow)
+    
+    return flows
+
+@torch.no_grad()
+def align_by_flow_high_res(x_prev=None,flow=None,decode_fn=None,encode_fn= None,first_stage_fn=None,alpha=0.5):
+
+    """
+    x_prev:        (B, 4, H, W) - original sample
+    flow:          (B-1, 2, H, W) - flow reference
+    """
+    B = x_prev.shape[0]
+    aligned_x_prev = x_prev.clone()
+    rgb_prev  = decode_latents(x_prev, decode_fn)
+    aligned_rgb_prev = rgb_prev.clone()
+    
+    for i in range(B - 1):
+        # Warp x_prev[i] to match x_prev[i+1]
+        warped_rgb = warp_image(rgb_prev[i].unsqueeze(0), flow[i])
+        aligned = alpha * rgb_prev[i + 1] + (1 - alpha) * warped_rgb.squeeze(0)
+        aligned_rgb_prev[i + 1] = aligned
+        rgb_prev[i+1]=aligned
+    
+    for i in range(B):
+        # Encode the aligned RGB frames back to latents
+        aligned_latent = encode_latents(aligned_rgb_prev[i].unsqueeze(0), encode_fn, first_stage_fn)
+        aligned_x_prev[i] = aligned_latent.squeeze(0)
+        
+        # # Save images for debugging
+        # save_clip_img(rgb_prev[i], f"Debug/flow/rgb_prev_{i}.png")
+        # save_clip_img(aligned_rgb_prev[i], f"Debug/flow/aligned_rgb_prev_{i}.png")
+        
+    
+    return aligned_x_prev
+
+
+@torch.no_grad()
+def align_by_flow(x_prev=None,flow=None,alpha=0.5):
+    """
+    x_prev:        (B, 4, H, W) - original sample
+    flow:          (B-1, 2, H, W) - flow reference
+    """
+    B = x_prev.shape[0]
+    aligned_x_prev = x_prev.clone()
+    
+    for i in range(B - 1):
+        # Warp x_prev[i] to match x_prev[i+1]
+        warped_latents = warp_image(x_prev[i].unsqueeze(0), flow[i])
+        aligned = alpha * x_prev[i + 1] + (1 - alpha) * warped_latents.squeeze(0)
+        aligned_x_prev[i + 1] = aligned
+    
+    return aligned_x_prev
+
+
+
+@torch.no_grad()
+def warp_from_video(x,video, alpha=0.5):
+    """
+    x:        (B, 4, H, W) - original sample
+    video:    (B, 3, H, W) - video frames
+    """
+    B = x.shape[0]
+    flows=[]
+    warped_video= []
+    for i in range(B - 1):
+        # Get RGB frames
+        frame1 = video[i].unsqueeze(0)
+        frame2 = video[i + 1].unsqueeze(0)
+        
+        frame1= un_norm(frame1)
+        frame2= un_norm(frame2)
+        # normalize to clip
+        frame1= norm_clip(frame1)
+        frame2= norm_clip(frame2)
+        
+        frame1=frame1.to(device)
+        frame2=frame2.to(device)
+        flow = compute_flow(frame2, frame1, model) 
+        flows.append(flow)
+        warped_latents = warp_image(x[i].unsqueeze(0), flow)
+        warped_vid= warp_image(frame1, flow)
+        
+        
+        aligned = alpha * x[i + 1] + (1 - alpha) * warped_latents.squeeze(0)
+        x[i + 1] = aligned
+    
+    
+    
+    return x
 
 
 @torch.no_grad()

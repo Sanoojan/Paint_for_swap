@@ -538,18 +538,17 @@ def run_inference(model, sampler, opt, device, config):
                                             batch_size=test_batch.shape[0],
                                             test_model_kwargs=test_model_kwargs_inv
                                             )
-                                x_noisy = torch.load(os.path.join(inverse_results_dir_for_batch, 'ddim_latents_961.pt'))
                             else:
-                                x_noisy = torch.load(os.path.join(inverse_results_dir_for_batch, 'ddim_latents_961.pt'))
+                                x_noisy = torch.load(os.path.join(inverse_results_dir_for_batch, 'ddim_latents_999.pt'))
                                 # start_code=x_noisy.to(x.device)
                             
-                            # x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
+                            x_noisy_target,x_noisy_src=x_noisy.chunk(2,dim=0)
                             
-                            start_code=x_noisy.to(x.device)
-                            # start_code=start_code1
+                            # start_code=x_noisy_target
+                            start_code=start_code1
                             video1=test_batch.clone()
                             # resize to 64,64
-                            video1 = F.interpolate(video1, size=(opt.H // opt.f, opt.W // opt.f), mode='bilinear', align_corners=False)
+                            # video1 = F.interpolate(video1, size=(opt.H // opt.f, opt.W // opt.f), mode='bilinear', align_corners=False)
                             flow= return_flow(video1)
                             
                             # start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=1.0,beta=0.8,normalized=True)
