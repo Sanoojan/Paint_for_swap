@@ -1,7 +1,7 @@
 import argparse, os, sys, glob
 
 #set cuda device 
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import cv2
 import torch
 import numpy as np
@@ -137,7 +137,7 @@ def numpy_to_pil(images):
 
 def load_model_from_config(config, ckpt, verbose=False):
     print(f"Loading model from {ckpt}")
-    pl_sd = torch.load(ckpt, map_location="cpu")
+    pl_sd = torch.load(ckpt, map_location="cpu",weights_only=False)
     if "global_step" in pl_sd:
         print(f"Global Step: {pl_sd['global_step']}")
     sd = pl_sd["state_dict"]
@@ -803,7 +803,10 @@ def main():
                             start_code = x_noisy_target
                             video1=test_batch.clone()
                             # resize to 64,64
-                            video1 = F.interpolate(video1, size=(opt.H // opt.f, opt.W // opt.f), mode='bilinear', align_corners=False)
+                            
+                            # video1 = F.interpolate(video1, size=(opt.H // opt.f, opt.W // opt.f), mode='bilinear', align_corners=False)
+                            
+                            # breakpoint()
                             flow= return_flow(video1)
                             
 

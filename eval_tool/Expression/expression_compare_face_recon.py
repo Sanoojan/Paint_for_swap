@@ -449,6 +449,11 @@ def main():
         target_path= os.path.join(args.path[0],list_videos[i])
         vid_name= list_videos[i]
         coordinate_path= os.path.join(args.crop_coordinates,list_videos[i],vid_name+"_inv_transforms.npy")
+        
+        if not os.path.exists(coordinate_path):
+            vid_name="vid"
+            coordinate_path= os.path.join(args.crop_coordinates,list_videos[i],vid_name+"_inv_transforms.npy")
+        
         Results_path= os.path.join(args.path[1],list_videos[i])
         if args.subfolders is not None or args.subfolders != '':
             Results_path= os.path.join(Results_path,args.subfolders)

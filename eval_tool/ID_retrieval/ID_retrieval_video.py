@@ -478,6 +478,10 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
         vidname= subdirectory
         coordinates_path = os.path.join(args.crop_coordinates, subdirectory , vidname+"_inv_transforms.npy")
         
+        if not os.path.exists(coordinates_path):
+            vidname="vid"
+            coordinates_path = os.path.join(args.crop_coordinates, subdirectory , vidname+"_inv_transforms.npy")
+        
         if args.results_subfolder is None or args.results_subfolder == "":
             paths[1] = os.path.join(paths[1], subdirectory)
         else:
@@ -485,7 +489,7 @@ def calculate_id_given_paths(paths, batch_size, device, dims, num_workers=1,data
         if args.target_subfolder is None:
             paths[3] = os.path.join(paths[3], subdirectory)
         else:
-            vidname= subdirectory
+            vidname= ""
             paths[3] = os.path.join(paths[3], subdirectory, vidname+args.target_subfolder)
 
         # breakpoint()

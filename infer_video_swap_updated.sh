@@ -2,8 +2,8 @@
 ##### EXPERIMENTAL #####
 
 Base_dir="outputs/VFHQ_test_full"
-Experiment_name="1_Vanilla_REFAce"
-device=3
+Experiment_name="23_Final_fft0.8_alpha0.8_steps50"
+device=2
 
 CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project_ffhq.yaml"
 DATA_CONFIG="dataset/FaceData/Data/VFHQ-Test/data_matching.yaml"

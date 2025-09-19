@@ -33,15 +33,21 @@ model = model.eval()
 def compute_flow(img1, img2, model):
     # padder = InputPadder(img1.shape)
     # img1, img2 = padder.pad(img1, img2)
+    # breakpoint()
     flow_up = model(img1, img2, num_flow_updates=20)
     return flow_up[-1]  # [B, 2, H, W]
 
 # Warp image using flow
 def warp_image(img, flow):
     # img: [B, C, H, W], flow: [B, 2, H, W]
+    # breakpoint()
     B, C, H, W = img.size()
     grid = kornia.utils.create_meshgrid(H, W, normalized_coordinates=False).to(img.device)  # [1, H, W, 2]
     grid = grid.permute(0, 3, 1, 2)  # [1, 2, H, W]
+    # resize the flow to 64,64
+    ### This is newly added. Previously flow was given with 64 resolution from torchvision
+    flow = F.interpolate(flow, size=(64, 64), mode="bilinear", align_corners=False)
+
     vgrid = grid + flow
 
     # Normalize to [-1, 1] for grid_sample

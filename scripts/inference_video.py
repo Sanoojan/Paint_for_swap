@@ -117,7 +117,7 @@ def numpy_to_pil(images):
 
 def load_model_from_config(config, ckpt, verbose=False):
     print(f"Loading model from {ckpt}")
-    pl_sd = torch.load(ckpt, map_location="cpu")
+    pl_sd = torch.load(ckpt, map_location="cpu",weights_only=False)
     if "global_step" in pl_sd:
         print(f"Global Step: {pl_sd['global_step']}")
     sd = pl_sd["state_dict"]
@@ -549,7 +549,7 @@ def run_inference(model, sampler, opt, device, config):
                             # start_code=start_code1
                             video1=test_batch.clone()
                             # resize to 64,64
-                            video1 = F.interpolate(video1, size=(opt.H // opt.f, opt.W // opt.f), mode='bilinear', align_corners=False)
+                            # video1 = F.interpolate(video1, size=(opt.H // opt.f, opt.W // opt.f), mode='bilinear', align_corners=False)
                             flow= return_flow(video1)
                             
                             # start_code=AdaIn_fusion(x_noisy_target,x_noisy_src,alpha=1.0,beta=0.8,normalized=True)

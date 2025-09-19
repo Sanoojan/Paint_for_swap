@@ -12,10 +12,11 @@ Ours_folder   = "outputs/VFHQ_test_full/22_BGC_PnP_with_fft_feature_injection_al
 Anyv2v_folder = "/home/sanoojan/Video_diffusion/AnyV2V/Results_full/Prompt-Based-Editing/i2vgen-xl/REFace1_new1/VIDEO"
 GoWith_the_flow_folder = "/home/sanoojan/Go-with-the-Flow/results/VIDEO/images"
 REFace_folder = "/home/sanoojan/Paint_for_swap/outputs/VFHQ_test_full/1_Vanilla_REFAce/results_new/VIDEO/results"
-output_folder = "Plotting/combined_images"
+output_folder = "Plotting/combined_images_2_methods"
 source_mapping_file = "outputs/VFHQ_test_full/1_REFace/results_new/data_matching.yaml"
 
-Align       = ['Source', 'Target', 'REFace', 'Anyv2v', 'GoWithTheFlow','Ours']
+# Align       = ['Source', 'Target', 'REFace', 'Anyv2v', 'GoWithTheFlow','VFace']
+Align       = ['Source', 'Target', 'REFace','VFace']
 # Video_names = ['Clip+1qf8dZpLED0+P2+C1+F5731-5855',
 #                'Clip+2W7Bk7EcRMg+P0+C1+F3663-3770',
 #                 'Clip+1L2d-mQA-Gc+P0+C0+F5084-5295',
@@ -34,6 +35,8 @@ Video_names = ['Clip+1qf8dZpLED0+P2+C1+F5731-5855',
                 'Clip+RfHY644z7aI+P0+C1+F2537-2828',
                 'Clip+y59gJXBBXp0+P0+C0+F2590-2709']
 
+Video_names = ['Clip+KSF3tPr9zAk+P0+C2+F8769-8880']
+
 
 
 os.makedirs(output_folder, exist_ok=True)
@@ -44,7 +47,7 @@ with open(source_mapping_file) as f:
 # ------------- NEW: build an index of sorted frame names -------------c 22
 def get_dir(method, video):
     if   method == 'Target':        return target_folder.replace('VIDEO',       video)
-    elif method == 'Ours':          return Ours_folder.replace('VIDEO',         video)
+    elif method == 'VFace':          return Ours_folder.replace('VIDEO',         video)
     elif method == 'Anyv2v':        return Anyv2v_folder.replace('VIDEO',       video)
     elif method == 'GoWithTheFlow': return GoWith_the_flow_folder.replace('VIDEO', video)
     elif method == 'REFace':      return REFace_folder.replace('VIDEO',       video)

@@ -2,8 +2,8 @@
 ##### EXPERIMENTAL #####
 
 Base_dir="outputs/CelebVHQ_test_full"
-Experiment_name="22_BGC_PnP_with_fft_feature_injection_all_with_op_flo_at_attn_trans_with_10_0.5"
-device=2
+Experiment_name="22_BGC_PnP_with_fft_feature_injection_all_with_op_flo_at_attn_trans_with_10_0.5_new_test"
+device=3
 
 CONFIG="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/project_ffhq.yaml"
 CKPT="models/Paint-by-Example/v5_Two_CLIP_proj_154/checkpoints/last.ckpt"

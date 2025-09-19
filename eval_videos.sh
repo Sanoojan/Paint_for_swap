@@ -1,16 +1,15 @@
-    device=5
+    device=1
     current_time=$(date +"%Y%m%d_%H%M%S")
     Write_results="Video_Quantitative2"
     
     
-    target_path="/home/sanoojan/Video_diffusion/AnyV2V/data/Data/VFHQ-Test/GT/Interval1_512x512_LANCZOS4"
+    target_path="dataset/FaceData/Data/VFHQ-Test/GT/Interval1_512x512_LANCZOS4"
     crop_coordinates="/home/sanoojan/Paint_for_swap/outputs/VFHQ_test_full/1_REFace/results_video"
     target_lables="dataset/FaceData/Data/VFHQ-Test/data_matching.yaml"
     target_lables="dataset/FaceData/Data/VFHQ-Test/data_matching_simswap.yaml"
-
     source_path="dataset/FaceData/Data/VFHQ-Test/Celeb_Source"
     source_mask_path="input_source_images/source_image_mask"
-    target_mask_path="outputs/VFHQ_test_full/11_PnP_with_feature_injection_for_inversion__tar_to_src_0_2_lyrs__avg_start/results_video"
+    target_mask_path="outputs/VFHQ_test_full/22_BGC_PnP_with_fft_feature_injection_all_with_op_flo_at_attn_trans_with_10_0.5/results_video"
 
     #################### /Change here ####################
     
@@ -35,11 +34,16 @@
     Results_out="outputs/VFHQ_test_full/22_BGC_PnP_with_fft_feature_injection_all_with_op_flo_at_attn_trans_with_10_0.5/results_new"
     # Results_out="outputs/VFHQ_test_full/1_Vanilla_REFAce/results_new"
     # Results_out="/home/sanoojan/Video_diffusion/AnyV2V/Results_full/Prompt-Based-Editing/i2vgen-xl/REFace1_new1"
-    Results_out="/home/sanoojan/Go-with-the-Flow/results"
+    # Results_out="/home/sanoojan/Go-with-the-Flow/results"
+    Results_out="outputs/VFHQ_test_full/23_Final_fft0.6/results_new"
+    # Results_out="outputs/VFHQ_test_full/23_only_FATS_TSG/results_new"
+    # Results_out="outputs/VFHQ_test_full/23_Final_fft0.4/results_new"
+    Results_out="outputs/VFHQ_test_full/23_Final_fft0.8_alpha0.8_steps40/results_new"
+    Video_results_out="outputs/VFHQ_test_full/23_Final_fft0.8_alpha0.8_steps40/results_new"
     
     # Video_results_out="outputs/VFHQ_test_full/1_REFace/results_new"
 
-    Video_results_out="/home/sanoojan/Go-with-the-Flow/results"
+    # Video_results_out="/home/sanoojan/Go-with-the-Flow/results"
     results_subfolder="results"
 
     #########################################################################################
